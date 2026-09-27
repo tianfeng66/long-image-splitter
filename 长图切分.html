@@ -1,0 +1,1856 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>长图切分工具</title>
+<style>
+  :root{--bg:#0b0d12;--panel:#12151d;--panel2:#181c26;--line:#292e3c;--text:#f5f7fb;--muted:#969eaf;--accent:#7c5cff;--accent2:#9a86ff;--danger:#ff5964;--ok:#41d69a;--warn:#ffa630;--blue:#3d8bff;--shadow:0 22px 70px rgba(0,0,0,.38)}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",sans-serif}
+  button,input{font:inherit;color:inherit}
+  button{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 14px;cursor:pointer;transition:.15s}
+  button:hover:not(:disabled){border-color:var(--accent2)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:var(--accent);border-color:var(--accent);font-weight:600}
+  button.primary:hover:not(:disabled){background:var(--accent2)}
+  button.danger{border-color:var(--danger);color:var(--danger)}
+  .wrap{max-width:1500px;margin:0 auto;padding:24px 28px 60px}
+  header h1{margin:0;font-size:24px}
+  header p{margin:6px 0 0;color:var(--muted)}
+  .steps{display:grid;grid-template-columns:1.2fr 1.2fr 1.6fr;gap:14px;margin-top:20px}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+  .step h3{margin:0 0 10px;font-size:15px}
+  .step h3 span{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);font-size:12px;margin-right:8px}
+  .step .val{margin-top:10px;color:var(--muted);font-size:13px;word-break:break-all}
+  .step .val b{color:var(--text)}
+  #drop.over{border-color:var(--accent2);background:#1a1830}
+  .params{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .params label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:12px}
+  .params input[type=number]{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%}
+  .checks{display:flex;gap:18px;margin-top:10px;color:var(--muted);font-size:13px}
+  .checks label{display:flex;gap:6px;align-items:center;cursor:pointer}
+  .bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:20px 0 12px;position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0;border-bottom:1px solid var(--line)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{padding:5px 12px;border-radius:999px;font-size:13px}
+  .chip.on{background:var(--accent);border-color:var(--accent)}
+  .spacer{flex:1}
+  .prog{display:none;align-items:center;gap:10px;margin-bottom:12px}
+  .prog.show{display:flex}
+  .prog .track{flex:1;height:8px;background:var(--panel2);border-radius:99px;overflow:hidden}
+  .prog .fill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .2s}
+  .prog .txt{color:var(--muted);font-size:13px;min-width:260px}
+  #list{display:flex;flex-direction:column;gap:8px}
+  .empty{padding:60px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
+  .row{display:grid;grid-template-columns:28px 280px 1fr;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px;cursor:pointer}
+  .row:hover{border-color:#3a4052}
+  .row.cur{border-color:var(--accent2)}
+  .row input{width:16px;height:16px;cursor:pointer}
+  .row .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .sub{color:var(--muted);font-size:12px;margin-top:2px}
+  .badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .bd{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+  .bd.ok{color:var(--ok);border-color:#265d49}
+  .bd.warn{color:var(--warn);border-color:#6b4a1c}
+  .bd.err{color:var(--danger);border-color:#6b2a30}
+  .bd.acc{color:var(--accent2);border-color:#3d3570}
+  .strip{display:flex;gap:6px;overflow-x:auto;align-items:flex-start;padding-bottom:4px;min-height:60px}
+  .tile{flex:none;position:relative;border-radius:4px;background-repeat:no-repeat;background-color:#000;border-top:3px solid transparent}
+  .tile i{position:absolute;left:3px;top:3px;font-style:normal;font-size:10px;background:rgba(0,0,0,.72);padding:0 4px;border-radius:3px}
+  .tile.k-natural{border-top-color:#e61e1e}.tile.k-edge{border-top-color:var(--blue)}.tile.k-forced{border-top-color:var(--warn)}.tile.k-manual{border-top-color:var(--ok)}
+  .dim{color:var(--muted);font-size:12px;align-self:center}
+  details.log{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+  details.log summary{cursor:pointer;color:var(--muted)}
+  #log{max-height:260px;overflow:auto;font:12px/1.6 ui-monospace,Menlo,monospace;color:var(--muted);white-space:pre-wrap;margin-top:8px}
+  #modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:20;display:none;align-items:center;justify-content:center;padding:24px}
+  #modal.show{display:flex}
+  .mbox{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);display:grid;grid-template-columns:minmax(280px,1fr) minmax(280px,1fr) 350px;grid-template-rows:minmax(0,1fr);height:calc(100vh - 48px);height:calc(100dvh - 48px);min-height:0;width:min(1580px,100%);overflow:hidden}
+  .mstage{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);border-right:1px solid var(--line);background:#07080b}
+  .vhead{display:flex;align-items:center;gap:8px;min-height:48px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);font-weight:700}
+  .vhead .spacer{flex:1}
+  .zoom{display:flex;align-items:center;gap:5px;font-weight:400}
+  .zoom button{padding:4px 9px;border-radius:7px;min-width:32px}
+  .zoom .zval{width:48px;text-align:center;color:var(--muted);font-size:12px}
+  .mview{overflow:auto;padding:18px;background:#07080b;min-width:0;min-height:0;height:100%}
+  .mimg{position:relative;width:520px;cursor:crosshair;user-select:none}
+  .mimg img{display:block;width:100%;height:100%;pointer-events:none}
+  #mresult{display:flex;flex-direction:column;align-items:flex-start;gap:16px;width:max-content;min-width:100%}
+  .resultPiece{position:relative;border:1px solid var(--line);border-radius:8px;background:#020304;overflow:hidden;box-shadow:0 5px 20px rgba(0,0,0,.3)}
+  .resultPiece.inRange{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accent2),0 0 18px rgba(124,92,255,.3)}
+  .resultPiece.deleted{border-style:dashed;opacity:.75}
+  .resultMeta{position:sticky;left:0;z-index:1;display:flex;align-items:center;gap:8px;justify-content:space-between;padding:4px 6px 4px 8px;background:rgba(15,17,24,.94);color:var(--muted);font-size:11px;white-space:nowrap}
+  .resultMeta b{color:var(--text)}
+  .resultInfo{display:flex;align-items:center;gap:10px;min-width:0}
+  .resultActions{display:flex;gap:4px}
+  .resultActions button{padding:2px 7px;border-radius:5px;font-size:10px}
+  .resultCrop{background-repeat:no-repeat;background-color:#000}
+  .resultCrop{cursor:zoom-in}
+  .resultDeleted{display:grid;place-items:center;min-width:260px;height:90px;color:var(--danger);background:repeating-linear-gradient(135deg,#11141c,#11141c 10px,#161923 10px,#161923 20px)}
+  .cut{position:absolute;left:-8px;right:-8px;height:0;border-top:1px dashed;cursor:ns-resize;touch-action:none;filter:drop-shadow(0 0 2px currentColor) drop-shadow(0 0 4px currentColor)}
+  .cut::before{content:"";position:absolute;left:0;right:0;top:-8px;height:16px}
+  .cut:hover{filter:brightness(1.8) drop-shadow(0 0 3px currentColor) drop-shadow(0 0 7px currentColor)}
+  .cut.selected{border-top-width:1px;filter:brightness(2) drop-shadow(0 0 3px currentColor) drop-shadow(0 0 8px currentColor);z-index:3}
+  .cut.dragging{border-top-width:1px;filter:brightness(2) drop-shadow(0 0 4px currentColor) drop-shadow(0 0 9px currentColor);z-index:3}
+  body.dragging-cut,body.dragging-cut *{cursor:ns-resize!important}
+  .dragtip{position:absolute;right:0;transform:translateY(calc(-100% - 6px));font-size:12px;font-weight:600;background:rgba(0,0,0,.88);border:1px solid var(--line);padding:3px 8px;border-radius:6px;pointer-events:none;white-space:nowrap;z-index:4}
+  .seg{position:absolute;left:4px;font-size:12px;font-weight:700;background:rgba(0,0,0,.75);padding:1px 6px;border-radius:4px;pointer-events:none;margin-top:5px}
+  .mside{padding:0;overflow:hidden;display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:0;height:100%}
+  .mscroll{padding:20px 20px 12px;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+  .mtitle{font-weight:700;font-size:15px;word-break:break-all}
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;color:var(--muted)}
+  .legend span::before{content:"";display:inline-block;width:18px;height:0;border-top:1px dashed var(--c);vertical-align:middle;margin-right:6px;filter:drop-shadow(0 0 2px var(--c))}
+  .hint{margin:0;font-size:12px;color:var(--muted);background:var(--panel2);border-radius:10px;padding:10px}
+  #mpieces{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  #mpieces div{display:flex;justify-content:space-between;background:var(--panel2);border-radius:6px;padding:4px 10px}
+  #mpieces .small{color:var(--warn)}
+  .regen{display:flex;flex-direction:column;gap:8px;padding:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px}
+  .regen strong{font-size:13px}
+  .range{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}
+  .range input{width:64px;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:5px 7px;text-align:center}
+  .regen .dim{font-size:11px}
+  .history{display:flex;gap:8px}
+  .history button{flex:1}
+  .mbtns,.mnav{display:flex;gap:8px;flex-wrap:wrap}
+  .mnav{margin:0;padding:12px 20px 20px;border-top:1px solid var(--line);background:var(--panel);flex-wrap:nowrap}
+  .mnav button{flex:1;white-space:nowrap}
+  #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:10px 18px;border-radius:12px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.2s;z-index:30;max-width:80vw}
+  #toast.show{opacity:1}
+  #toast.err{border-color:var(--danger);color:#ffc2c6}
+  #toast.ok{border-color:var(--ok)}
+  #pieceModal{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.82)}
+  #pieceModal.show{display:flex}
+  .pbox{width:min(1200px,100%);height:calc(100vh - 48px);height:calc(100dvh - 48px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+  .phead{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+  .phead .spacer{flex:1}
+  #pview{overflow:auto;min-height:0;padding:24px;background:#050609}
+  #pimg{position:relative;background-repeat:no-repeat;background-color:#000;box-shadow:0 8px 40px rgba(0,0,0,.5);user-select:none}
+  #pcrop{position:absolute;display:none;border:1px solid #fff;box-shadow:0 0 0 99999px rgba(0,0,0,.58),0 0 10px rgba(255,255,255,.8);cursor:move;touch-action:none}
+  #pcrop.show{display:block}
+  .cropHandle{position:absolute;width:12px;height:12px;border:2px solid #111;background:#fff;border-radius:50%}
+  .cropHandle[data-edge=n]{left:50%;top:0;transform:translate(-50%,-50%);cursor:ns-resize}
+  .cropHandle[data-edge=s]{left:50%;bottom:0;transform:translate(-50%,50%);cursor:ns-resize}
+  .cropHandle[data-edge=w]{left:0;top:50%;transform:translate(-50%,-50%);cursor:ew-resize}
+  .cropHandle[data-edge=e]{right:0;top:50%;transform:translate(50%,-50%);cursor:ew-resize}
+  .cropHandle[data-edge=nw]{left:0;top:0;transform:translate(-50%,-50%);cursor:nwse-resize}
+  .cropHandle[data-edge=ne]{right:0;top:0;transform:translate(50%,-50%);cursor:nesw-resize}
+  .cropHandle[data-edge=sw]{left:0;bottom:0;transform:translate(-50%,50%);cursor:nesw-resize}
+  .cropHandle[data-edge=se]{right:0;bottom:0;transform:translate(50%,50%);cursor:nwse-resize}
+  .pfoot{display:flex;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
+  .pfoot .dim{margin-right:auto}
+  #pCropActions{display:none;gap:8px}
+  #pCropActions.show{display:flex}
+  body.busy .lock{pointer-events:none;opacity:.5}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#2c3242;border-radius:99px;border:2px solid var(--bg)}
+  ::-webkit-scrollbar-thumb:hover{background:#3d4459}
+  @media(max-width:1000px){
+    #modal{padding:10px}
+    .mbox{height:calc(100dvh - 20px);grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) 310px}
+    .mside{grid-column:1/-1;grid-row:2}
+    #pieceModal{padding:10px}.pbox{height:calc(100dvh - 20px)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>长图切分工具</h1>
+    <p>自动结合留白、深色分隔带、拼接缝、相邻色彩分界和周围切片高度切开长图。原图只读不改动，手动调整会自动保存在本机。请用桌面版 Google Chrome 打开。</p>
+  </header>
+
+  <section class="steps">
+    <div class="step lock" id="drop">
+      <h3><span>1</span>选择原图文件夹</h3>
+      <button class="primary" id="pickSrc">选择文件夹</button>
+      <span class="dim">&nbsp;或把文件夹拖到这里</span>
+      <div class="val" id="srcVal">只需要读取权限，不会修改原文件夹里的任何文件。</div>
+    </div>
+    <div class="step lock">
+      <h3><span>2</span>选择结果保存位置</h3>
+      <button id="pickOut" disabled>选择保存位置</button>
+      <div class="val" id="outVal">选择原图后，可将结果保存到任意其他文件夹。</div>
+    </div>
+    <div class="step">
+      <h3><span>3</span>切分参数 <span class="dim" style="background:none;width:auto;font-weight:400">改动后自动重算</span></h3>
+      <div class="params lock">
+        <label>单片最大高宽比<input type="number" id="maxRatio" value="1.5" step="0.1" min="0.3"></label>
+        <label>单片最小高宽比<input type="number" id="minRatio" value="0.3" step="0.05" min="0.05"></label>
+        <label>分隔带最小高度（% 图宽）<input type="number" id="minGap" value="1.2" step="0.1" min="0.2"></label>
+      </div>
+      <div class="checks lock">
+        <label><input type="checkbox" id="recursive">包含子文件夹</label>
+        <label><input type="checkbox" id="overwrite">覆盖已有结果</label>
+      </div>
+    </div>
+  </section>
+
+  <div class="bar">
+    <div class="chips" id="chips"></div>
+    <div class="spacer"></div>
+    <button class="lock" id="selAll">全选</button>
+    <button class="lock" id="selNone">全不选</button>
+    <button class="lock" id="selFive">只勾前 5 张试切</button>
+    <button class="primary lock" id="run" disabled>开始切分</button>
+  </div>
+  <div class="prog" id="prog"><div class="track"><div class="fill" id="progFill"></div></div><div class="txt" id="progTxt"></div><button class="danger" id="stop">停止</button></div>
+
+  <div id="list"><div class="empty">先选择原图文件夹，工具会自动分析每张图该从哪里切。点击任意一行可以查看大图并手动调整切口。</div></div>
+
+  <details class="log"><summary>运行日志</summary><div id="log"></div></details>
+</div>
+
+<div id="modal">
+  <div class="mbox">
+    <div class="mstage">
+      <div class="vhead">原图（可调整切分线）<span class="spacer"></span><div class="zoom"><button id="mOrigOut" title="缩小原图" aria-label="缩小原图">−</button><span class="zval" id="mOrigZoom">100%</span><button id="mOrigIn" title="放大原图" aria-label="放大原图">＋</button><button id="mOrigFit">适应</button></div></div>
+      <div class="mview" id="mview"><div class="mimg" id="mimg"><img id="mimgEl" alt=""><div id="mlines"></div></div></div>
+    </div>
+    <div class="mstage">
+      <div class="vhead">切分后效果<span class="spacer"></span><div class="zoom"><button id="mResultOut" title="缩小效果图" aria-label="缩小效果图">−</button><span class="zval" id="mResultZoom">100%</span><button id="mResultIn" title="放大效果图" aria-label="放大效果图">＋</button><button id="mResultFit">适应</button></div></div>
+      <div class="mview" id="mresultView"><div id="mresult"></div></div>
+    </div>
+    <div class="mside">
+      <div class="mscroll">
+      <div><div class="mtitle" id="mtitle"></div><div class="dim" id="msub"></div></div>
+      <div class="legend">
+        <span style="--c:#e61e1e">分隔带（最可靠）</span>
+        <span style="--c:var(--blue)">拼接缝</span>
+        <span class="dash" style="--c:var(--warn)">强制切（请检查）</span>
+        <span style="--c:var(--ok)">手动添加</span>
+      </div>
+      <p class="hint">点击图片添加切口，会自动吸附到附近的分隔带或拼接缝。<br>点一下切口线删除；长按（或按住直接上下拖）可以移动。右键切口线后，用 ↑/↓ 精调 1px，按住 Shift 每次调 10px，Esc 取消选中。<br>拖动时按住 Option 不吸附；改动会保留，切分时按调整后的切口执行。</p>
+      <div id="mpieces"></div>
+      <div class="regen">
+        <strong>重新识别右侧切分效果</strong>
+        <div class="range">图片 <input type="number" id="mFrom" aria-label="重新生成起始图片编号" min="1" step="1" value="1"> 到 <input type="number" id="mTo" aria-label="重新生成结束图片编号" min="1" step="1" value="1"></div>
+        <button class="primary lock" id="mRange">重新生成选中范围</button>
+        <span class="dim">参考选区上下已有切片的高度，优先寻找色彩突变、拼接缝和留白分隔线；只更新右侧，不写入文件夹。</span>
+      </div>
+      <div class="history"><button id="mUndo">↶ 撤销</button><button id="mRedo">↷ 重做</button></div>
+      <div class="mbtns"><button id="mReset">恢复自动切口</button><button class="primary lock" id="mOne">生成全部切片</button></div>
+      </div>
+      <div class="mnav"><button id="mPrev">← 上一张</button><button id="mNext">下一张 →</button><button id="mClose">关闭（Esc）</button></div>
+    </div>
+  </div>
+</div>
+<div id="pieceModal">
+  <div class="pbox">
+    <div class="phead"><b id="pTitle"></b><span class="dim" id="pSub"></span><span class="spacer"></span><div class="zoom"><button id="pOut" aria-label="缩小大图">−</button><span class="zval" id="pZoom">100%</span><button id="pIn" aria-label="放大大图">＋</button><button id="pFit">适应</button></div><button id="pClose">关闭</button></div>
+    <div id="pview"><div id="pimg"><div id="pcrop"><i class="cropHandle" role="button" aria-label="裁剪上边" data-edge="n"></i><i class="cropHandle" role="button" aria-label="裁剪下边" data-edge="s"></i><i class="cropHandle" role="button" aria-label="裁剪左边" data-edge="w"></i><i class="cropHandle" role="button" aria-label="裁剪右边" data-edge="e"></i><i class="cropHandle" role="button" aria-label="裁剪左上角" data-edge="nw"></i><i class="cropHandle" role="button" aria-label="裁剪右上角" data-edge="ne"></i><i class="cropHandle" role="button" aria-label="裁剪左下角" data-edge="sw"></i><i class="cropHandle" role="button" aria-label="裁剪右下角" data-edge="se"></i></div></div></div>
+    <div class="pfoot"><span class="dim" id="pHint">可放大检查；裁剪和删除只修改右侧效果，生成时才写入文件。</span><button id="pStartCrop">裁剪</button><button class="danger" id="pDelete">删除图片</button><div id="pCropActions"><button id="pCancelCrop">取消裁剪</button><button class="primary" id="pApplyCrop">应用裁剪</button></div></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const EXT_RE = /\.(jpe?g|png|webp|bmp|gif)$/i;
+const ANALYSIS_WIDTH = 480, BAND = 4096, THUMB_W = 240;
+const RESULT_SUFFIX = '切分结果';
+const KIND_COLOR = {natural:'#e61e1e', edge:'#3d8bff', forced:'#ffa630', manual:'#41d69a'};
+const KIND_MARK = {natural:'', edge:'~', forced:'*', manual:'+'};
+const STATUS = {
+  wait:['等待分析',''], short:['不够长，跳过',''], plan:['待切分','acc'],
+  done:['已切分','ok'], exists:['已有结果，已跳过','warn'], error:['失败','err']
+};
+const FILTERS = [['all','全部'],['plan','待切分'],['forced','含强制切'],['short','不够长'],['done','已完成'],['error','失败']];
+
+const state = {src:null, parent:null, items:[], savedAdjustments:{}, filter:'all', busy:false, stop:false, cur:-1, modalUrl:null};
+let cutSeq=0;
+const newCutId=()=>`c${Date.now().toString(36)}${(++cutSeq).toString(36)}`;
+function ensureCutIds(it){
+  for(const c of it.cuts) if(!c.id) c.id=newCutId();
+}
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg, type='', ms=3200){const t=$('#toast');t.textContent=msg;t.className='show '+type;clearTimeout(t._h);t._h=setTimeout(()=>t.className='',ms)}
+function log(msg){const el=$('#log');el.textContent+=`[${new Date().toLocaleTimeString()}] ${msg}\n`;el.scrollTop=el.scrollHeight}
+function params(){
+  return {maxRatio:+$('#maxRatio').value||1.5, minRatio:+$('#minRatio').value||0.3, minGap:(+$('#minGap').value||1.2)/100,
+          stdThr:6, gradThr:2, edgeThr:0.45};
+}
+async function permission(handle, write=false){
+  if(!handle?.queryPermission) return true;
+  const o={mode:write?'readwrite':'read'};
+  if(await handle.queryPermission(o)==='granted') return true;
+  return (await handle.requestPermission(o))==='granted';
+}
+function splitName(name){const m=name.match(/^(.*?)(\.[^.]+)?$/);return {stem:m[1]||name, ext:m[2]||''}}
+
+// ------------------------------------------------------------ 分析
+
+function computeMetrics(bmp){
+  const W=bmp.width, H=bmp.height, aw=Math.min(W, ANALYSIS_WIDTH);
+  const rowMean=new Float32Array(H), rowStd=new Float32Array(H), rowGrad=new Float32Array(H), rowDarkFrac=new Float32Array(H);
+  const rowR=new Float32Array(H), rowG=new Float32Array(H), rowB=new Float32Array(H);
+  const edgeFrac=new Float32Array(Math.max(0,H-1)), faintEdgeFrac=new Float32Array(Math.max(0,H-1));
+  const c=makeCanvas(aw, 1);
+  const ctx=c.getContext('2d',{willReadFrequently:true});
+  let prev=new Float32Array(aw), cur=new Float32Array(aw), hasPrev=false;
+  for(let y0=0; y0<H; y0+=BAND){
+    const bh=Math.min(BAND, H-y0);
+    c.height=bh;
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,aw,bh);
+    ctx.imageSmoothingQuality='medium';
+    ctx.drawImage(bmp, 0, y0, W, bh, 0, 0, aw, bh);
+    const d=ctx.getImageData(0,0,aw,bh).data;
+    for(let r=0; r<bh; r++){
+      let sum=0, sq=0, gr=0, ed=0, faint=0, dark=0, sr=0, sg=0, sb=0; const base=r*aw*4;
+      for(let x=0; x<aw; x++){
+        const i=base+x*4, v=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+        cur[x]=v; sum+=v; sq+=v*v; sr+=d[i]; sg+=d[i+1]; sb+=d[i+2];
+        if(v<70) dark++;
+        if(x>0) gr+=Math.abs(v-cur[x-1]);
+        if(hasPrev){
+          const change=Math.abs(v-prev[x]);
+          if(change>15) ed++;
+          if(change>2) faint++;
+        }
+      }
+      const y=y0+r, mean=sum/aw;
+      rowMean[y]=mean; rowDarkFrac[y]=dark/aw;
+      rowStd[y]=Math.sqrt(Math.max(0, sq/aw-mean*mean));
+      rowGrad[y]=aw>1 ? gr/(aw-1) : 0;
+      rowR[y]=sr/aw; rowG[y]=sg/aw; rowB[y]=sb/aw;
+      if(hasPrev){edgeFrac[y-1]=ed/aw; faintEdgeFrac[y-1]=faint/aw}
+      [prev,cur]=[cur,prev]; hasPrev=true;
+    }
+  }
+  c.width=c.height=0;
+  return {rowMean,rowStd,rowGrad,rowDarkFrac,rowR,rowG,rowB,edgeFrac,faintEdgeFrac};
+}
+
+function stableColorBoundaries(m,W,H){
+  if(m.stableColorCuts) return m.stableColorCuts;
+  const {rowR,rowG,rowB,rowStd,rowGrad,edgeFrac,faintEdgeFrac}=m;
+  if(!rowR||!rowG||!rowB) return [];
+  const prefix=a=>{const p=new Float64Array(H+1);for(let i=0;i<H;i++)p[i+1]=p[i]+a[i];return p};
+  const pr=prefix(rowR),pg=prefix(rowG),pb=prefix(rowB);
+  const avg=(p,a,b)=>(p[b]-p[a])/Math.max(1,b-a);
+  const win=Math.max(2,Math.round(.004*W)),broad=Math.max(win*3,Math.round(.02*W));
+  const scores=new Float32Array(H);
+  for(let y=win;y<H-win;y++){
+    const ar=avg(pr,y-win,y),ag=avg(pg,y-win,y),ab=avg(pb,y-win,y);
+    const br=avg(pr,y,y+win),bg=avg(pg,y,y+win),bb=avg(pb,y,y+win);
+    const color=Math.hypot(ar-br,ag-bg,ab-bb);
+    let structuralColor=0;
+    if(y-2*broad>=0&&y+2*broad<H){
+      const ar2=avg(pr,y-2*broad,y-broad),ag2=avg(pg,y-2*broad,y-broad),ab2=avg(pb,y-2*broad,y-broad);
+      const br2=avg(pr,y+broad,y+2*broad),bg2=avg(pg,y+broad,y+2*broad),bb2=avg(pb,y+broad,y+2*broad);
+      const broadColor=Math.hypot(ar2-br2,ag2-bg2,ab2-bb2);
+      const rowDistance=(a,b)=>Math.hypot(rowR[a]-rowR[b],rowG[a]-rowG[b],rowB[a]-rowB[b]);
+      const instability=rowDistance(y-2*broad,y-broad)+rowDistance(y+broad,y+2*broad);
+      structuralColor=Math.max(0,broadColor-.8*instability);
+    }
+    let edge=0,faint=0;
+    for(let q=Math.max(0,y-3);q<Math.min(edgeFrac.length,y+3);q++){
+      edge=Math.max(edge,edgeFrac[q]);faint=Math.max(faint,faintEdgeFrac[q]);
+    }
+    const quiet=rowStd[y]<6&&rowGrad[y]<2 ? .8 : 0;
+    const fullWidthBonus=edge>=.82?3.5:edge>=.7?1:0;
+    const uniformColorBonus=quiet&&structuralColor>8?4:0;
+    const evidence=Math.min(4,color/11)+Math.min(5,structuralColor/10)+Math.min(3.5,edge*4)+Math.min(.8,faint*.8)+fullWidthBonus+uniformColorBonus;
+    scores[y]=evidence+(evidence>.4?quiet:0);
+  }
+  const raw=[];
+  for(let y=win+1;y<H-win-1;y++) if(scores[y]>=.75&&scores[y]>=scores[y-1]&&scores[y]>=scores[y+1]) raw.push({y,q:scores[y],kind:'edge'});
+  raw.sort((a,b)=>b.q-a.q);
+  const chosen=[],sep=Math.max(8,Math.round(.006*W));
+  for(const c of raw){
+    if(chosen.some(x=>Math.abs(x.y-c.y)<sep)) continue;
+    chosen.push(c);
+    if(chosen.length>=800) break;
+  }
+  chosen.sort((a,b)=>a.y-b.y);
+  m.stableColorCuts=chosen;
+  return chosen;
+}
+
+function darkSeparatorBands(m,W,H){
+  if(m.darkSeparatorCuts) return m.darkSeparatorCuts;
+  const {rowMean,rowStd,rowGrad,rowDarkFrac}=m;
+  if(!rowMean||!rowDarkFrac) return [];
+  const raw=[];
+  let s=-1;
+  for(let y=0;y<=H;y++){
+    const dark=y<H&&rowDarkFrac[y]>=.72&&rowMean[y]<=78;
+    if(dark&&s<0) s=y;
+    else if(!dark&&s>=0){raw.push([s,y]);s=-1}
+  }
+  const merged=[],join=Math.max(3,Math.round(.018*W));
+  for(const [a,b] of raw){
+    const last=merged.at(-1);
+    if(last&&a-last[1]<=join) last[1]=b; else merged.push([a,b]);
+  }
+  const avg=(arr,a,b)=>{let sum=0;for(let y=a;y<b;y++)sum+=arr[y];return sum/Math.max(1,b-a)};
+  const minH=Math.max(6,Math.round(.025*W)),maxH=Math.max(minH+1,Math.round(.45*W));
+  const probe=Math.max(5,Math.round(.025*W)),cuts=[];
+  for(const [a,b] of merged){
+    const h=b-a;
+    if(a<probe||b>H-probe||h<minH||h>maxH) continue;
+    const bar=avg(rowMean,a,b),before=avg(rowMean,a-probe,a),after=avg(rowMean,b,b+probe);
+    const contrast=Math.min(before-bar,after-bar);
+    if(contrast<12) continue;
+    const lo=Math.round(a+.2*h),hi=Math.round(b-.2*h),center=(a+b)/2;
+    let y=lo,best=Infinity;
+    for(let q=lo;q<=hi;q++){
+      const score=rowMean[q]+.45*rowStd[q]+.25*rowGrad[q]+.04*Math.abs(q-center);
+      if(score<best){best=score;y=q}
+    }
+    cuts.push({y,start:a,end:b,q:Math.min(15,7+contrast/15+h/(.12*W)),kind:'natural'});
+  }
+  m.darkSeparatorCuts=cuts;
+  return cuts;
+}
+
+function refineVisibleBoundary(m,W,H,y){
+  const {rowR,rowG,rowB,edgeFrac}=m;
+  if(!rowR||!rowG||!rowB) return Math.round(y);
+  const maxBand=Math.max(4,Math.min(24,Math.round(.008*W)));
+  const lo=Math.max(1,Math.round(y)-2*maxBand),hi=Math.min(H-1,Math.round(y)+2*maxBand);
+  const values=[];
+  let maxScore=0;
+  for(let q=lo;q<=hi;q++){
+    const color=Math.hypot(rowR[q]-rowR[q-1],rowG[q]-rowG[q-1],rowB[q]-rowB[q-1]);
+    const score=color+55*(edgeFrac[q-1]||0);
+    values.push({y:q,score});maxScore=Math.max(maxScore,score);
+  }
+  if(maxScore<4) return Math.round(y);
+  const threshold=Math.max(2.5,maxScore*.08);
+  const groups=[];
+  for(const v of values){
+    if(v.score<threshold) continue;
+    const g=groups.at(-1);
+    if(g&&v.y-g.at(-1).y<=2) g.push(v); else groups.push([v]);
+  }
+  if(!groups.length) return Math.round(y);
+  const peaks=groups.map(g=>({y:g.at(-1).y,score:Math.max(...g.map(v=>v.score))}));
+  let index=0,bestDistance=Infinity;
+  for(let i=0;i<peaks.length;i++){
+    const d=Math.abs(peaks[i].y-y);
+    if(d<bestDistance){index=i;bestDistance=d}
+  }
+  const current=peaks[index];
+  // 同一条窄分隔带通常有“进入色带”和“离开色带”两次突变。
+  // 切在后一条边上，避免把下一幅画面的顶部留在上一张结果中。
+  let last=current;
+  for(let i=index+1;i<peaks.length;i++){
+    if(peaks[i].y-current.y>maxBand) break;
+    if(peaks[i].score>=maxScore*.08) last=peaks[i];
+  }
+  if(last!==current) return last.y;
+  return current.y;
+}
+
+function planCuts(m, W, H, p){
+  const {rowStd,rowGrad,edgeFrac,faintEdgeFrac}=m;
+  const minGap=Math.max(4, Math.round(p.minGap*W)), minH=p.minRatio*W, maxH=p.maxRatio*W;
+  const cands=[], nat=new Uint8Array(H), strictCuts=[];
+
+  let s=-1;
+  for(let y=0; y<=H; y++){
+    const q = y<H && rowStd[y]<p.stdThr && rowGrad[y]<p.gradThr;
+    if(q && s<0) s=y;
+    else if(!q && s>=0){
+      const gap=y-s;
+      if(s>0 && y<H && gap>=minGap){
+        const cutY=Math.floor((s+y)/2);
+        cands.push({y:cutY, cost:-(1+Math.min(1, gap/(0.1*W))), kind:'natural'});
+        strictCuts.push(cutY);
+        nat.fill(1, s, y);
+      }
+      s=-1;
+    }
+  }
+
+  // 宽黑条常被居中的章节标题打断，不能只按“整行纯色”识别。
+  // 先把整段深色区域合并，再只保留一条位于安全空白行的切口。
+  const darkBlocks=[];
+  for(const d of darkSeparatorBands(m,W,H)){
+    for(let i=cands.length-1;i>=0;i--) if(cands[i].y>=d.start&&cands[i].y<=d.end) cands.splice(i,1);
+    for(let i=strictCuts.length-1;i>=0;i--) if(strictCuts[i]>=d.start&&strictCuts[i]<=d.end) strictCuts.splice(i,1);
+    nat.fill(1,d.start,d.end);
+    strictCuts.push(d.y); darkBlocks.push([d.start,d.end]);
+    cands.push({y:d.y,cost:-5,kind:'natural'});
+  }
+
+  // 渐变或带轻微纹理的空白带。先合并被少量噪声打断的低纹理行，
+  // 再取中间作为安全切口；过宽的平滑区通常是天空或雾面背景，不切。
+  const softRuns=[]; s=-1;
+  for(let y=0; y<=H; y++){
+    const q=y<H && rowStd[y]<35 && rowGrad[y]<1.25;
+    if(q && s<0) s=y;
+    else if(!q && s>=0){softRuns.push([s,y]); s=-1}
+  }
+  const merged=[], joinGap=Math.max(3,Math.round(0.012*W));
+  for(const [a,b] of softRuns){
+    const last=merged.at(-1);
+    if(last && a-last[1]<=joinGap) last[1]=b;
+    else merged.push([a,b]);
+  }
+  const softBlocks=[], majorGapCuts=[];
+  for(const [a,b] of merged){
+    const gap=b-a;
+    if(a===0 || b===H || gap<minGap || gap>0.2*W) continue;
+    let overlaps=false;
+    for(let y=a; y<b; y++) if(nat[y]){overlaps=true;break}
+    if(overlaps || strictCuts.some(y=>Math.abs(Math.floor((a+b)/2)-y)<minH)) continue;
+    let y=Math.floor((a+b)/2);
+    let snapStrength=0;
+    if(gap>=0.12*W && faintEdgeFrac[a-1]>=0.1){
+      // 宽章节分隔区通常有一条原生顶边线；切在线上，而非空白中央。
+      y=a; majorGapCuts.push(y);
+    }else if(gap<=0.06*W){
+      // 短过渡带前的整行突变通常是真正拼接处；带内只接受极强
+      // 突变，避免吸附到下一张图的状态栏。
+      const lo=Math.max(1,a-joinGap), hi=Math.min(H-1,b);
+      let snapped=false;
+      for(let q=lo; q<=Math.min(hi,a+2); q++) if(edgeFrac[q-1]>=p.edgeThr){
+        y=q; snapStrength=edgeFrac[q-1]; snapped=true; break;
+      }
+      if(!snapped) for(let q=a; q<=hi; q++) if(edgeFrac[q-1]>=0.8){
+        y=q; snapStrength=edgeFrac[q-1]; break;
+      }
+      softBlocks.push([Math.max(0,a-joinGap),Math.min(H,b+joinGap)]);
+    }
+    cands.push({y, cost:-(0.6+Math.min(0.8,gap/(0.1*W))+0.7*snapStrength), kind:'natural'});
+  }
+
+  // 开头到第一条宽章节线本身不超长时，之前的窄留白只是标题、
+  // 文字、色板等内部版式间距，不应额外切开。
+  const intro=majorGapCuts.filter(y=>y<=maxH).sort((a,b)=>a-b)[0];
+  if(intro!==undefined) for(const c of cands)
+    if(c.kind==='natural' && c.y<intro) c.cost=Math.max(c.cost,0.4);
+
+  // 相邻两块内容无空隙直接拼接时，交界处整行像素会突变
+  const win=Math.max(2, Math.floor(0.005*W));
+  const edgePeaks=[];
+  for(let i=0; i<edgeFrac.length; i++){
+    const f=edgeFrac[i]; if(f<p.edgeThr) continue;
+    const y=i+1; if(y<minGap || y>H-minGap) continue;
+    let skip=strictCuts.some(c=>Math.abs(y-c)<minH);
+    for(const [a,b] of softBlocks) if(a<=y && y<=b){skip=true;break}
+    for(let k=Math.max(0,i-win); !skip && k<Math.min(edgeFrac.length,i+win+1); k++) if(edgeFrac[k]>f) skip=true;
+    if(!skip) edgePeaks.push([y,f]);
+  }
+  const edgeGroups=[], clusterGap=Math.max(win*2,Math.round(0.015*W));
+  for(const peak of edgePeaks){
+    const group=edgeGroups.at(-1);
+    if(group && peak[0]-group.at(-1)[0]<=clusterGap) group.push(peak);
+    else edgeGroups.push([peak]);
+  }
+  for(const group of edgeGroups){
+    const y=group[0][0], f=Math.max(...group.map(v=>v[1]));
+    // 80% 以上列同时突变，基本可以确认是拼接缝；较弱横线只作备选，
+    // 避免把界面内部的状态栏当作切口。
+    const cost=f>=0.8 ? -0.8-4*(f-0.8) : 1-0.5*f;
+    cands.push({y, cost, kind:'edge'});
+  }
+
+  // RGB 多尺度色彩分界：亮度接近但色相明显不同的相邻画面，也应视为切口。
+  // 只有高置信度分界给予负成本；正文横线等普通候选只用于超长时择优。
+  for(const c of stableColorBoundaries(m,W,H)){
+    if(c.y<minGap||c.y>H-minGap||strictCuts.some(y=>Math.abs(y-c.y)<minGap)) continue;
+    if(darkBlocks.some(([a,b])=>c.y>=a-minGap&&c.y<=b+minGap)) continue;
+    if(cands.some(x=>Math.abs(x.y-c.y)<Math.max(3,.004*W)&&x.cost<0)) continue;
+    const cost=c.q>=12?-6:c.q>=9?-3:c.q>=6?.2:1.2;
+    cands.push({y:c.y,cost,kind:'edge'});
+  }
+
+  const pre=new Float64Array(H+1);
+  for(let y=0; y<H; y++) pre[y+1]=pre[y]+rowGrad[y]+0.3*rowStd[y];
+  const busy=y=>(pre[Math.min(H,y+5)]-pre[Math.max(0,y-4)])/9;
+  const step=Math.max(8, Math.floor(maxH/8)), hs=Math.floor(step/2);
+  for(let b0=step; b0<H-hs; b0+=step){
+    let best=b0-hs, bv=Infinity;
+    for(let y=b0-hs; y<b0+hs; y++){const v=busy(y); if(v<bv){bv=v;best=y}}
+    cands.push({y:best, cost:3+bv/5, kind:'forced'});
+  }
+
+  cands.sort((a,b)=>a.y-b.y);
+  const ys=[0, ...cands.map(c=>c.y), H], costs=[0, ...cands.map(c=>c.cost), 0], n=ys.length;
+  const dp=new Float64Array(n).fill(Infinity), prev=new Int32Array(n).fill(-1);
+  dp[0]=0;
+  for(let j=1; j<n; j++){
+    for(let i=j-1; i>=0; i--){
+      const h=ys[j]-ys[i];
+      if(h>maxH) break;
+      if(h<=0 || dp[i]===Infinity) continue;
+      const v=dp[i]+(h>=minH ? 0 : 10+(minH-h)/W)+costs[j];
+      if(v<dp[j]){dp[j]=v; prev[j]=i}
+    }
+  }
+  if(dp[n-1]===Infinity) throw new Error('找不到满足约束的切分方案');
+  const chain=[]; let j=n-1;
+  while(prev[j]>0){j=prev[j]; chain.push(j)}
+  chain.reverse();
+  const refine=c=>c.kind==='edge'?{...c,y:refineVisibleBoundary(m,W,H,c.y)}:{...c};
+  const cuts=chain.map(j=>refine({y:ys[j],kind:cands[j-1].kind})).sort((a,b)=>a.y-b.y);
+  const snaps=cands.filter(c=>c.kind!=='forced').map(refine).sort((a,b)=>a.y-b.y);
+  return {cuts,snaps};
+}
+
+function replan(it){
+  if(!it.metrics || it.edited || !['wait','plan','short'].includes(it.status)) return;
+  const p=params();
+  if(it.H/it.W <= p.maxRatio){it.status='short'; it.cuts=[]; it.snaps=[]; it.checked=false; return}
+  const r=planCuts(it.metrics, it.W, it.H, p);
+  const wasPlan=it.status==='plan';
+  it.cuts=r.cuts.map(c=>({...c,id:newCutId()})); it.snaps=r.snaps; it.status='plan';
+  const refined=refineInitialCuts(it,p);
+  it.autoRefined=refined.added; it.autoMerged=refined.removed; it.autoTarget=refined.target;
+  const colorCuts=stableColorBoundaries(it.metrics,it.W,it.H).filter(c=>c.q>=6);
+  it.colorDetected=it.cuts.filter(c=>colorCuts.some(x=>Math.abs(x.y-c.y)<=Math.max(3,.01*it.W))).length;
+  const darkCuts=darkSeparatorBands(it.metrics,it.W,it.H);
+  it.darkDetected=it.cuts.filter(c=>darkCuts.some(x=>c.y>=x.start&&c.y<=x.end)).length;
+  if(!wasPlan) it.checked=true;
+}
+
+async function makeThumb(bmp){
+  const tw=Math.min(THUMB_W, bmp.width), th=Math.max(1, Math.min(30000, Math.round(bmp.height*tw/bmp.width)));
+  const c=makeCanvas(tw, th);
+  const ctx=c.getContext('2d'); ctx.imageSmoothingQuality='high'; ctx.drawImage(bmp,0,0,tw,th);
+  const blob=await toBlob(c,'image/jpeg',0.82); c.width=c.height=0;
+  return URL.createObjectURL(blob);
+}
+
+function restoreSavedAdjustment(it){
+  const saved=it.savedAdjustment;
+  if(!saved) return 'none';
+  const sameFile=saved.size===it.size && saved.lastModified===it.lastModified
+    && saved.width===it.W && saved.height===it.H;
+  let valid=sameFile && Array.isArray(saved.cuts), last=0;
+  const cuts=[];
+  if(valid) for(const c of saved.cuts){
+    const y=Math.round(Number(c.y)), kind=String(c.kind);
+    if(!Number.isFinite(y) || y<=last || y<=0 || y>=it.H || !KIND_COLOR[kind]){valid=false;break}
+    cuts.push({y,kind,id:typeof c.id==='string'&&c.id?c.id:newCutId()}); last=y;
+  }
+  if(!valid){
+    it.savedAdjustment=null; it.saveState='';
+    adjustmentStore.remove(state.src,it.path);
+    return 'stale';
+  }
+  it.cuts=cuts; it.pieceEdits=cleanPieceEdits(saved.pieceEdits);
+  it.outputHistory=cleanOutputHistory(saved.outputHistory);
+  it.outputFuture=cleanOutputHistory(saved.outputFuture);
+  it.cutEdited=saved.cutEdited!==false;
+  it.edited=it.cutEdited||hasOutputEdits(it); it.restored=true; it.saveState='saved';
+  it.status='plan'; it.checked=cuts.length>0;
+  return 'restored';
+}
+
+async function analyzeAll(){
+  const todo=state.items.filter(it=>!it.metrics && it.status!=='error');
+  if(!todo.length) return;
+  setBusy(true,'分析');
+  let k=0, restored=0, stale=0;
+  for(const it of todo){
+    if(state.stop) break;
+    progress(k, todo.length, `分析中 ${k+1}/${todo.length}：${it.name}`);
+    try{
+      const file=await it.handle.getFile();
+      it.size=file.size; it.type=file.type; it.lastModified=file.lastModified||0;
+      const bmp=await createImageBitmap(file);
+      it.W=bmp.width; it.H=bmp.height;
+      it.metrics=computeMetrics(bmp);
+      it.thumb=await makeThumb(bmp);
+      bmp.close();
+      replan(it);
+      const restore=restoreSavedAdjustment(it);
+      if(restore==='restored') restored++;
+      else if(restore==='stale') stale++;
+    }catch(e){
+      it.status='error'; it.msg='无法解码：'+e.message; log(`${it.path} 分析失败：${e.message}`);
+    }
+    updateRow(state.items.indexOf(it)); k++;
+    if(k%4===0) await new Promise(r=>setTimeout(r));
+  }
+  progress(k, todo.length, state.stop?`已停止，分析了 ${k}/${todo.length} 张`:`分析完成，共 ${todo.length} 张`);
+  setBusy(false); renderChips();
+  if(state.cur>=0) renderModal();
+  if(restored) toast(`已从本机恢复 ${restored} 张图片的手动切口`,'ok',5000);
+  if(stale) log(`${stale} 条手动调整因原图已变化而自动作废`);
+}
+
+// ------------------------------------------------------------ 选择文件夹
+
+async function listFiles(dir, prefix, recursive, out){
+  for await (const [name, h] of dir.entries()){
+    if(name.startsWith('.')) continue;
+    if(h.kind==='directory'){
+      if(recursive && !name.endsWith(RESULT_SUFFIX)) await listFiles(h, prefix+name+'/', true, out);
+    }else if(EXT_RE.test(name)) out.push({path:prefix+name, name, handle:h});
+  }
+}
+
+async function setSrc(h){
+  if(!(await permission(h,false))){toast('没有获得读取权限','err');return}
+  let sameSource=false;
+  try{sameSource=!!state.src && await state.src.isSameEntry(h)}catch(e){}
+  state.items.forEach(it=>it.thumb && URL.revokeObjectURL(it.thumb));
+  state.src=h; if(!sameSource) state.parent=null; state.items=[]; state.cur=-1;
+  state.savedAdjustments=await adjustmentStore.load(h);
+  $('#srcVal').innerHTML=`已选：<b>${esc(h.name)}</b>，正在读取文件列表…`;
+  const files=[]; await listFiles(h,'',$('#recursive').checked,files);
+  files.sort((a,b)=>a.path.localeCompare(b.path,'zh'));
+  const used=new Set();
+  state.items=files.map(f=>{
+    const {stem,ext}=splitName(f.name);
+    let sub=stem, n=2;
+    if(used.has(sub)) sub=`${stem}_${ext.slice(1).toLowerCase()}`;
+    while(used.has(sub)) sub=`${stem}_${ext.slice(1).toLowerCase()}_${n++}`;
+    used.add(sub);
+    const savedAdjustment=state.savedAdjustments[f.path]||null;
+    return {...f, stem, ext, sub, status:'wait', cuts:[], snaps:[], checked:false, edited:false, cutEdited:false,
+            pieceEdits:{}, outputHistory:[], outputFuture:[],
+            savedAdjustment, restored:false, saveState:savedAdjustment?'pending':''};
+  });
+  $('#srcVal').innerHTML=`已选：<b>${esc(h.name)}</b>，共 ${files.length} 张图片（只读）`;
+  await updateOutVal(); renderList(); renderChips();
+  if(!files.length){toast('这个文件夹里没有找到图片','err');return}
+  analyzeAll();
+}
+
+async function pickSrc(){
+  if(!window.showDirectoryPicker){toast('当前浏览器不支持文件夹授权，请用最新版桌面版 Google Chrome 打开。','err');return}
+  try{await setSrc(await showDirectoryPicker({mode:'read', id:'longsplit-src'}))}
+  catch(e){if(e.name!=='AbortError') toast('无法打开文件夹：'+e.message,'err')}
+}
+
+// 用户选择任意保存位置，工具在其中创建或复用「<原文件夹名>切分结果」。
+// 最近选过的位置保存在 IndexedDB 中，只用于下次打开选择器时快速定位。
+const resultName = () => state.src.name+RESULT_SUFFIX;
+const parentStore={
+  async db(){
+    if(!this._db) this._db=await new Promise((res,rej)=>{
+      const r=indexedDB.open('longsplit',1);
+      r.onupgradeneeded=()=>r.result.createObjectStore('kv');
+      r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+    });
+    return this._db;
+  },
+  async list(){
+    try{
+      const db=await this.db();
+      return await new Promise(res=>{const q=db.transaction('kv').objectStore('kv').get('parents'); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>res([])});
+    }catch(e){return []}
+  },
+  async add(h){
+    try{
+      const keep=[h];
+      for(const p of await this.list()) if(keep.length<30 && !(await p.isSameEntry(h))) keep.push(p);
+      const db=await this.db();
+      await new Promise(res=>{const t=db.transaction('kv','readwrite'); t.objectStore('kv').put(keep,'parents'); t.oncomplete=res; t.onerror=res});
+    }catch(e){}
+  }
+};
+
+// 手动切口按“原文件夹句柄 + 相对路径”保存在 IndexedDB。
+// FileSystemHandle 可被 Chromium 结构化克隆，因此同名但不同位置的文件夹不会串记录。
+const adjustmentStore={
+  key:'adjustmentProjectsV1',
+  queue:Promise.resolve(),
+  async read(){
+    try{
+      const db=await parentStore.db();
+      return await new Promise(res=>{
+        const q=db.transaction('kv').objectStore('kv').get(this.key);
+        q.onsuccess=()=>res(Array.isArray(q.result)?q.result:[]);
+        q.onerror=()=>res([]);
+      });
+    }catch(e){return []}
+  },
+  async write(projects){
+    try{
+      const db=await parentStore.db();
+      return await new Promise(res=>{
+        const t=db.transaction('kv','readwrite');
+        t.objectStore('kv').put(projects,this.key);
+        t.oncomplete=()=>res(true); t.onerror=()=>res(false); t.onabort=()=>res(false);
+      });
+    }catch(e){return false}
+  },
+  async sameSource(a,b){
+    try{return !!a?.isSameEntry && await a.isSameEntry(b)}catch(e){return false}
+  },
+  async find(projects,source){
+    for(let i=0;i<projects.length;i++) if(await this.sameSource(projects[i].source,source)) return i;
+    return -1;
+  },
+  async load(source){
+    await this.queue;
+    const projects=await this.read(), i=await this.find(projects,source);
+    return i>=0 && projects[i].files ? projects[i].files : {};
+  },
+  save(source,path,data){
+    this.queue=this.queue.then(async()=>{
+      const projects=await this.read();
+      let i=await this.find(projects,source);
+      if(i<0){projects.unshift({source,files:{}});i=0}
+      if(!projects[i].files) projects[i].files={};
+      projects[i].files[path]=data;
+      projects[i].updatedAt=Date.now();
+      return this.write(projects.slice(0,30));
+    }).catch(()=>false);
+    return this.queue;
+  },
+  remove(source,path){
+    this.queue=this.queue.then(async()=>{
+      const projects=await this.read(), i=await this.find(projects,source);
+      if(i<0) return true;
+      delete projects[i].files[path];
+      projects[i].updatedAt=Date.now();
+      return this.write(projects);
+    }).catch(()=>false);
+    return this.queue;
+  }
+};
+
+async function isInsideSource(h){
+  try{
+    if(await h.isSameEntry(state.src)) return true;
+    return !!(await state.src.resolve(h));
+  }catch(e){return false}
+}
+async function updateOutVal(){
+  const pick=$('#pickOut');
+  pick.disabled=!state.src;
+  pick.textContent=state.parent?'更改保存位置':'选择保存位置';
+  if(!state.src){
+    $('#outVal').textContent='选择原图后，可将结果保存到任意其他文件夹。';
+    return;
+  }
+  if(!state.parent){
+    $('#outVal').innerHTML=`请选择一个不是原图文件夹内部的位置。切分时会自动创建：<b>${esc(resultName())}/</b>`;
+    return;
+  }
+  let granted=false;
+  try{granted=!state.parent.queryPermission || (await state.parent.queryPermission({mode:'readwrite'}))==='granted'}
+  catch(e){}
+  if(state.parent.name===resultName()){
+    $('#outVal').innerHTML=`结果直接写入已选文件夹：<b>${esc(state.parent.name)}/</b>，每张原图一个子文件夹。`;
+  }else{
+    $('#outVal').innerHTML=`保存位置：<b>${esc(state.parent.name)}/</b><br>将在其中创建或复用：<b>${esc(resultName())}/</b>`;
+  }
+  if(!granted) $('#outVal').insertAdjacentHTML('beforeend','<br>开始切分时浏览器会询问写入权限，点「允许」即可。');
+}
+async function pickOutput(){
+  if(!state.src){toast('请先选择原图文件夹','err');return false}
+  if(!window.showDirectoryPicker){toast('当前浏览器不支持文件夹授权，请用最新版桌面版 Google Chrome 打开。','err');return false}
+  toast(`请选择保存位置，工具会自动创建「${resultName()}」`, '', 5000);
+  let h;
+  try{
+    const recent=(await parentStore.list())[0];
+    h=await showDirectoryPicker({mode:'readwrite', id:'longsplit-output', startIn:state.parent||recent||'pictures'});
+  }catch(e){if(e.name!=='AbortError') toast('无法选择保存位置：'+e.message,'err'); return false}
+  if(await isInsideSource(h)){
+    toast('保存位置不能是原图文件夹或它里面的子文件夹，请选择其他位置','err',6000);
+    return false;
+  }
+  if(!(await permission(h,true))){toast('没有获得保存位置的写入权限','err');return false}
+  state.parent=h; await parentStore.add(h); await updateOutVal();
+  toast(`已选择保存位置：${h.name}`,'ok');
+  return true;
+}
+async function ensureParent(){
+  if(state.parent && !(await isInsideSource(state.parent))){
+    if(await permission(state.parent,true)) return true;
+    toast('原保存位置没有写入权限，请重新选择','err');
+  }
+  state.parent=null; await updateOutVal();
+  return pickOutput();
+}
+
+// ------------------------------------------------------------ 切分与写文件
+
+function makeCanvas(w, h){
+  if(typeof OffscreenCanvas!=='undefined') return new OffscreenCanvas(w, h);
+  const c=document.createElement('canvas'); c.width=w; c.height=h; return c;
+}
+function toBlob(canvas, type, q){
+  if(canvas.convertToBlob) return canvas.convertToBlob({type, quality:q});
+  return new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error('图片编码失败')), type, q));
+}
+async function writeFile(dir, name, data){
+  const fh=await dir.getFileHandle(name,{create:true});
+  const w=await fh.createWritable();
+  await w.write(data); await w.close();
+  return fh;
+}
+function outputType(it){
+  const t=(it.type||'').toLowerCase();
+  if(t==='image/jpeg'||t==='image/png'||t==='image/webp') return {type:t, ext:it.ext};
+  return {type:'image/png', ext:'.png'};
+}
+const bounds = it => [0, ...it.cuts.map(c=>c.y), it.H];
+const clonePieceEdits=edits=>JSON.parse(JSON.stringify(edits||{}));
+const cloneCuts=cuts=>(cuts||[]).map(c=>({y:c.y,kind:c.kind,id:c.id}));
+function cleanPieceEdits(value){
+  const out={};
+  if(!value || typeof value!=='object' || Array.isArray(value)) return out;
+  for(const [key,raw] of Object.entries(value)){
+    if(!raw || typeof raw!=='object') continue;
+    const edit={};
+    if(raw.deleted===true) edit.deleted=true;
+    if(raw.crop && ['l','t','r','b'].every(k=>Number.isFinite(+raw.crop[k]))){
+      const l=Math.max(0,Math.min(1,+raw.crop.l)), t=Math.max(0,Math.min(1,+raw.crop.t));
+      const r=Math.max(0,Math.min(1,+raw.crop.r)), b=Math.max(0,Math.min(1,+raw.crop.b));
+      if(r-l>=0.001 && b-t>=0.001) edit.crop={l,t,r,b};
+    }
+    if(edit.deleted || edit.crop) out[key]=edit;
+  }
+  return out;
+}
+function cleanOutputHistory(value){
+  if(!Array.isArray(value)) return [];
+  return value.slice(-30).flatMap(entry=>{
+    if(!entry||typeof entry!=='object') return [];
+    const clean={state:cleanPieceEdits(entry.state),label:String(entry.label||'编辑切分效果').slice(0,80)};
+    if(Array.isArray(entry.cuts)) clean.cuts=entry.cuts.flatMap(c=>{
+      const y=Math.round(+c?.y),kind=String(c?.kind||'edge');
+      return Number.isFinite(y)&&KIND_COLOR[kind]?[{y,kind,id:typeof c.id==='string'&&c.id?c.id:newCutId()}]:[];
+    }).sort((a,b)=>a.y-b.y);
+    if(typeof entry.cutEdited==='boolean') clean.cutEdited=entry.cutEdited;
+    return [clean];
+  });
+}
+function basePieces(it){
+  ensureCutIds(it);
+  const b=bounds(it);
+  return b.slice(0,-1).map((y,k)=>({
+    index:k+1,
+    key:`${k ? it.cuts[k-1].id : 'top'}|${k<it.cuts.length ? it.cuts[k].id : 'bottom'}`,
+    baseX:0,baseY:y,baseW:it.W,baseH:b[k+1]-y
+  }));
+}
+function outputPieces(it){
+  return basePieces(it).map(base=>{
+    const edit=(it.pieceEdits||{})[base.key]||{};
+    const c=edit.crop||{l:0,t:0,r:1,b:1};
+    const x=Math.round(base.baseX+c.l*base.baseW), y=Math.round(base.baseY+c.t*base.baseH);
+    const x2=Math.round(base.baseX+c.r*base.baseW), y2=Math.round(base.baseY+c.b*base.baseH);
+    return {...base,x,y,w:Math.max(1,x2-x),h:Math.max(1,y2-y),deleted:!!edit.deleted,crop:{...c}};
+  });
+}
+function prunePieceEdits(it){
+  const valid=new Set(basePieces(it).map(p=>p.key));
+  for(const key of Object.keys(it.pieceEdits||{})) if(!valid.has(key)) delete it.pieceEdits[key];
+}
+function hasOutputEdits(it){
+  const valid=new Set(basePieces(it).map(p=>p.key));
+  return Object.keys(it.pieceEdits||{}).some(key=>valid.has(key));
+}
+
+async function cutOne(it, root, overwrite){
+  let dir=null;
+  try{dir=await root.getDirectoryHandle(it.sub)}catch(e){}
+  if(dir && !overwrite){it.status='exists'; it.msg=`输出里已有「${it.sub}」`; return null}
+  if(dir){
+    const prefix=it.stem+'_', old=[];
+    for await(const [n,h] of dir.entries()){
+      if(h.kind!=='file' || !n.startsWith(prefix)) continue;
+      if(/^(\d+|00原图|对照预览)\.[^.]+$/.test(n.slice(prefix.length))) old.push(n);
+    }
+    for(const n of old) await dir.removeEntry(n);
+  }else dir=await root.getDirectoryHandle(it.sub,{create:true});
+
+  const file=await it.handle.getFile();
+  if(file.size!==it.size) throw new Error('原图在分析后发生了变化，请重新选择文件夹');
+
+  const bmp=await createImageBitmap(file);
+  try{
+    if(bmp.width!==it.W || bmp.height!==it.H) throw new Error('原图尺寸与分析时不一致');
+    const {type, ext}=outputType(it);
+    const pieces=outputPieces(it).filter(p=>!p.deleted);
+    if(!pieces.length) throw new Error('所有切片都已删除，请至少保留一张');
+    for(let k=0; k<pieces.length; k++){
+      const p=pieces[k], c=makeCanvas(p.w,p.h);
+      c.getContext('2d').drawImage(bmp,p.x,p.y,p.w,p.h,0,0,p.w,p.h);
+      const blob=await toBlob(c, type, 0.95); c.width=c.height=0;
+      const number=String(k+1).padStart(2,'0');
+      const outName=`${it.stem}_${number}${ext}`;
+      await writeFile(dir, outName, blob);
+      const chk=await createImageBitmap(blob);
+      if(chk.width!==p.w || chk.height!==p.h){chk.close(); throw new Error(`第 ${k+1} 片尺寸校验失败`)}
+      chk.close();
+    }
+  }finally{bmp.close()}
+
+  it.status='done'; it.checked=false;
+  it.msg=`已写入 ${resultName()}/${it.sub}/`;
+  const forced=it.cuts.filter(c=>c.kind==='forced').length;
+  const count=outputPieces(it).filter(p=>!p.deleted).length;
+  const done=hasOutputEdits(it)?'完成(效果已编辑)':it.cutEdited?'完成(手动调整)':'完成';
+  return [it.name, `${it.W}x${it.H}`, (it.H/it.W).toFixed(2), done,
+          count, forced, it.cuts.map(c=>c.y+KIND_MARK[c.kind]).join(' '), it.path];
+}
+
+async function appendCsv(root, rows){
+  if(!rows.length) return;
+  const csvCell=v=>{const s=String(v); return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s};
+  let text='';
+  try{text=await (await (await root.getFileHandle('切分记录.csv')).getFile()).text()}catch(e){}
+  if(text && !text.startsWith('\ufeff')) text='\ufeff'+text;
+  if(!text) text='\ufeff'+['文件名','尺寸','高宽比','状态','切片数','强制切数','切口y坐标(~=拼接缝 *=强制切 +=手动)','原图相对路径'].join(',')+'\n';
+  text+=rows.map(r=>r.map(csvCell).join(',')).join('\n')+'\n';
+  await writeFile(root,'切分记录.csv',text);
+}
+
+async function resultRoot(){
+  return state.parent.name===resultName()
+    ? state.parent
+    : state.parent.getDirectoryHandle(resultName(),{create:true});
+}
+
+async function runCut(indices, forceOverwrite=false){
+  indices=indices.filter(i=>state.items[i].cuts.length && outputPieces(state.items[i]).some(p=>!p.deleted));
+  if(!indices.length){toast('没有勾选需要切分的图片','err');return}
+  if(!(await ensureParent())) return;
+  if(!(await permission(state.src,false))){toast('没有获得原图文件夹的读取权限','err');return}
+
+  const root=await resultRoot();
+  const overwrite=forceOverwrite || $('#overwrite').checked;
+  setBusy(true,'切分');
+  const rows=[]; let ok=0, skip=0, fail=0, k=0;
+  for(const i of indices){
+    if(state.stop) break;
+    const it=state.items[i];
+    progress(k, indices.length, `切分中 ${k+1}/${indices.length}：${it.name}`);
+    try{
+      const row=await cutOne(it, root, overwrite);
+      if(row){rows.push(row); ok++; log(`${it.path} → ${it.cuts.length+1} 片`)}
+      else{skip++; log(`${it.path} 已有结果，跳过`)}
+    }catch(e){
+      it.status='error'; it.msg=e.message; fail++; log(`${it.path} 失败：${e.message}`);
+      rows.push([it.name, `${it.W}x${it.H}`, '', '失败: '+e.message, '', '', '', it.path]);
+    }
+    updateRow(i); k++;
+  }
+  try{await appendCsv(root, rows)}catch(e){log('写入切分记录失败：'+e.message)}
+  const summary=`${state.stop?'已停止。':''}完成 ${ok} 张${skip?`，已有结果跳过 ${skip} 张（勾选「覆盖已有结果」可重切）`:''}${fail?`，失败 ${fail} 张`:''}`;
+  progress(k, indices.length, summary);
+  toast(summary, fail?'err':'ok', 5000); log(summary);
+  setBusy(false); renderChips();
+  if(state.cur>=0) renderModal();
+}
+
+function median(values){
+  const a=values.filter(Number.isFinite).sort((x,y)=>x-y);
+  if(!a.length) return 0;
+  const m=Math.floor(a.length/2);
+  return a.length%2?a[m]:(a[m-1]+a[m])/2;
+}
+function localTargetHeight(it,pieces,from,to){
+  const before=pieces.slice(Math.max(0,from-4),from-1).map(p=>p.baseH);
+  const after=pieces.slice(to,Math.min(pieces.length,to+3)).map(p=>p.baseH);
+  let refs=[...before,...after];
+  if(refs.length<2) refs=pieces.map(p=>p.baseH);
+  const raw=median(refs)||it.W;
+  return Math.round(Math.max(.18*it.W,Math.min(1.5*it.W,raw)));
+}
+function rangeBoundaryCandidates(it,start,end){
+  const addMap=new Map();
+  const add=(y,q,kind,id)=>{
+    y=Math.round(y);
+    if(y<=start+10||y>=end-10) return;
+    const old=addMap.get(y);
+    if(!old||q>old.q) addMap.set(y,{y,q,kind,id});
+  };
+  for(const s of it.snaps||[]) if(s.y>start&&s.y<end) add(s.y,s.kind==='natural'?5:3.4,s.kind);
+  for(const c of it.cuts) if(c.y>start&&c.y<end) add(c.y,1.4,c.kind,c.id);
+  for(const c of darkSeparatorBands(it.metrics,it.W,it.H)) if(c.y>start&&c.y<end) add(c.y,c.q,'natural');
+  for(const c of stableColorBoundaries(it.metrics,it.W,it.H)) if(c.y>start&&c.y<end) add(c.y,c.q,c.kind);
+  return [...addMap.values()];
+}
+function replanSelectedRange(it,from,to){
+  const pieces=basePieces(it);
+  const first=pieces[from-1],last=pieces[to-1];
+  if(!first||!last) throw new Error('重新识别范围无效');
+  const start=first.baseY,end=last.baseY+last.baseH,total=end-start;
+  const target=localTargetHeight(it,pieces,from,to);
+  const count=Math.max(1,Math.min(200,Math.round(total/target)));
+  const average=total/count,cands=rangeBoundaryCandidates(it,start,end);
+  const internal=[];
+  for(let k=1;k<count;k++){
+    const expected=start+k*average, radius=.46*average;
+    let best=null,bestValue=-Infinity;
+    for(const c of cands){
+      const distance=Math.abs(c.y-expected);
+      if(distance>radius) continue;
+      // 分界可信度达到一定程度后，以邻近切片推算出的高度为主，
+      // 避免正文中的粗横线比真正的整幅色彩分界更“抢分”。
+      const value=Math.min(6,c.q)-2.2*distance/average;
+      if(value>bestValue){best=c;bestValue=value}
+    }
+    if(best){
+      const snapRadius=Math.max(10,.025*it.W);
+      for(const c of cands) if(Math.abs(c.y-best.y)<=snapRadius&&c.q>best.q+1) best=c;
+      const kind=best.kind||'edge';
+      const y=kind==='edge'?refineVisibleBoundary(it.metrics,it.W,it.H,best.y):best.y;
+      const old=it.cuts.find(c=>Math.abs(c.y-y)<=3);
+      internal.push({y,kind,id:best.id||old?.id||newCutId()});
+    }else internal.push({y:Math.round(expected),kind:'forced',id:newCutId()});
+  }
+  const outside=it.cuts.filter(c=>c.y<=start||c.y>=end);
+  return {
+    cuts:[...outside,...internal].sort((a,b)=>a.y-b.y),
+    target,count,start,end,oldCount:to-from+1,
+    detected:internal.filter(c=>c.kind!=='forced').length
+  };
+}
+function initialTypicalHeight(it,p){
+  const strong=[...stableColorBoundaries(it.metrics,it.W,it.H).filter(c=>c.q>=8.5),...darkSeparatorBands(it.metrics,it.W,it.H)]
+    .sort((a,b)=>a.y-b.y)
+    .filter((c,i,a)=>!i||c.y-a[i-1].y>Math.max(4,.01*it.W));
+  if(strong.length<2) return null;
+  const ys=[0,...strong.map(c=>c.y),it.H].sort((a,b)=>a-b);
+  const minUseful=p.minRatio*it.W*.7;
+  const gaps=ys.slice(0,-1).map((y,i)=>ys[i+1]-y).filter(h=>h>=minUseful);
+  if(gaps.length<3) return null;
+  return {target:median(gaps),strong};
+}
+function structuralStrength(it,y){
+  const radius=Math.max(8,.015*it.W);
+  let q=0;
+  for(const c of stableColorBoundaries(it.metrics,it.W,it.H)) if(Math.abs(c.y-y)<=radius) q=Math.max(q,c.q);
+  for(const c of darkSeparatorBands(it.metrics,it.W,it.H)) if(y>=c.start-radius&&y<=c.end+radius) q=Math.max(q,c.q);
+  return q;
+}
+function mergeTinyInitialPieces(it,p,typical){
+  if(!typical) return 0;
+  let removed=0;
+  const blocked=new Set();
+  for(let pass=0;pass<50;pass++){
+    const pieces=basePieces(it);
+    const tiny=pieces.filter(x=>x.baseH<typical.target*.58&&!blocked.has(x.key)).sort((a,b)=>a.baseH-b.baseH)[0];
+    if(!tiny) break;
+    const i=tiny.index-1;
+    const options=[];
+    if(i>0){
+      const cut=it.cuts[i-1];
+      if(structuralStrength(it,cut.y)<8.5) options.push({cut,score:Math.abs(pieces[i-1].baseH+tiny.baseH-typical.target)});
+    }
+    if(i<it.cuts.length){
+      const cut=it.cuts[i];
+      if(structuralStrength(it,cut.y)<8.5) options.push({cut,score:Math.abs(tiny.baseH+pieces[i+1].baseH-typical.target)});
+    }
+    options.sort((a,b)=>a.score-b.score);
+    if(!options.length){blocked.add(tiny.key);continue}
+    it.cuts=it.cuts.filter(c=>c.id!==options[0].cut.id);
+    removed++;
+  }
+  return removed;
+}
+function refineInitialCuts(it,p){
+  const typical=initialTypicalHeight(it,p);
+  const removed=mergeTinyInitialPieces(it,p,typical);
+  let added=0;
+  const skipped=new Set();
+  for(let pass=0;pass<20;pass++){
+    const pieces=basePieces(it);
+    if(pieces.length<3) break;
+    const target=typical?.target||median(pieces.map(piece=>piece.baseH));
+    const threshold=Math.max(target*1.85,p.minRatio*it.W*2);
+    const piece=pieces.find(x=>x.baseH>threshold&&!skipped.has(x.key));
+    if(!piece) break;
+    const plan=replanSelectedRange(it,piece.index,piece.index);
+    if(plan.count<=1||plan.detected===0){skipped.add(piece.key);continue}
+    it.cuts=plan.cuts;
+    added+=plan.count-1;
+  }
+  return {added,removed,target:typical?.target||0};
+}
+function regenerateRange(){
+  const it=state.items[state.cur];
+  if(!it?.cuts.length || state.busy) return;
+  const range=selectedRange(it);
+  let plan;
+  try{plan=replanSelectedRange(it,range.from,range.to)}
+  catch(e){toast('重新识别失败：'+e.message,'err');return}
+  const changed=commitCutEdit(it,`重新识别图片 ${range.from}–${range.to}`,()=>{it.cuts=plan.cuts});
+  if(!changed){toast('没有找到比当前更合适的切分位置');return}
+  const text=`右侧已按约 ${plan.target}px 的参考高度重新识别：${plan.oldCount} 张 → ${plan.count} 张，其中 ${plan.detected} 条切口命中色彩分界或分隔线`;
+  toast(text+'；尚未写入文件夹','ok',7000);
+  log(`${it.path} · ${text}`);
+}
+
+// ------------------------------------------------------------ 界面
+
+function setBusy(b, what){
+  state.busy=b; state.stop=false;
+  document.body.classList.toggle('busy', b);
+  $('#prog').classList.add('show');
+  $('#stop').style.display=b?'':'none';
+  $('#stop').textContent=`停止${what||''}`;
+  updateRunBtn();
+}
+function progress(done, total, txt){
+  $('#progFill').style.width=(total?done/total*100:0)+'%';
+  $('#progTxt').textContent=txt;
+}
+function matches(it, f=state.filter){
+  if(f==='all') return true;
+  if(f==='forced') return it.status==='plan' && it.cuts.some(c=>c.kind==='forced');
+  if(f==='done') return it.status==='done' || it.status==='exists';
+  return it.status===f;
+}
+function renderChips(){
+  const cnt=Object.fromEntries(FILTERS.map(([k])=>[k, state.items.filter(it=>matches(it,k)).length]));
+  $('#chips').innerHTML=FILTERS.map(([k,l])=>`<button class="chip${state.filter===k?' on':''}" data-f="${k}">${l} ${cnt[k]}</button>`).join('');
+  updateRunBtn();
+}
+function updateRunBtn(){
+  const n=state.items.filter(it=>it.checked && it.cuts.length && outputPieces(it).some(p=>!p.deleted)).length;
+  $('#run').textContent=n?`开始切分已勾选的 ${n} 张`:'开始切分';
+  $('#run').disabled=!n || state.busy;
+}
+
+function tilesHTML(it){
+  if(it.status==='error') return `<span class="dim">${esc(it.msg||'')}</span>`;
+  if(!it.thumb) return '<span class="dim">等待分析…</span>';
+  const out=[], TH=78, MAXW=300;
+  for(const p of outputPieces(it)){
+    if(p.deleted){
+      out.push(`<div class="tile" style="width:70px;height:${TH}px;display:grid;place-items:center;color:var(--danger)"><i>${p.index} 已删除</i>×</div>`);
+      continue;
+    }
+    let tw=Math.round(TH*p.w/p.h), th=TH;
+    if(tw>MAXW){tw=MAXW; th=Math.max(6,Math.round(MAXW*p.h/p.w))}
+    const scale=tw/p.w, bgW=it.W*scale, bgH=it.H*scale;
+    const px=-p.x*scale, py=-p.y*scale;
+    const kind=p.index===1?'':' k-'+it.cuts[p.index-2].kind;
+    out.push(`<div class="tile${kind}" style="width:${tw}px;height:${th}px;background-image:url(${it.thumb});background-size:${bgW}px ${bgH}px;background-position:${px}px ${py}px"><i>${p.index}</i></div>`);
+  }
+  return out.join('');
+}
+function rowHTML(it, i){
+  const [label, cls]=STATUS[it.status];
+  const badges=[`<span class="bd ${cls}">${label}</span>`];
+  if(it.cuts.length){
+    badges.push(`<span class="bd">${it.cuts.length+1} 片</span>`);
+    if(it.colorDetected) badges.push(`<span class="bd acc">色彩分界 ${it.colorDetected}</span>`);
+    if(it.darkDetected) badges.push(`<span class="bd acc">深色分隔带 ${it.darkDetected}</span>`);
+    if(it.autoRefined) badges.push(`<span class="bd ok">自动细分 +${it.autoRefined}</span>`);
+    if(it.autoMerged) badges.push(`<span class="bd ok">自动合并误切 ${it.autoMerged}</span>`);
+    const f=it.cuts.filter(c=>c.kind==='forced').length;
+    if(f) badges.push(`<span class="bd warn">强制切 ${f} 刀</span>`);
+  }
+  if(it.cutEdited) badges.push('<span class="bd ok">手动调整</span>');
+  if(hasOutputEdits(it)){
+    const deleted=outputPieces(it).filter(p=>p.deleted).length;
+    badges.push(`<span class="bd acc">效果已编辑${deleted?` · 删除 ${deleted}`:''}</span>`);
+  }
+  if(it.saveState==='pending') badges.push('<span class="bd">有本机记录，待验证</span>');
+  else if(it.saveState==='saving') badges.push('<span class="bd warn">正在保存调整…</span>');
+  else if(it.saveState==='saved') badges.push(`<span class="bd ok">${it.restored?'已恢复本机记录':'调整已保存'}</span>`);
+  else if(it.saveState==='error') badges.push('<span class="bd err">调整保存失败</span>');
+  if(it.msg && it.status!=='error') badges.push(`<span class="bd">${esc(it.msg)}</span>`);
+  return `<div class="row${state.cur===i?' cur':''}" id="r${i}" data-i="${i}">
+    <input type="checkbox" class="pick lock" data-i="${i}" ${it.checked?'checked':''} ${it.cuts.length?'':'disabled'}>
+    <div><div class="name" title="${esc(it.path)}">${esc(it.path)}</div>
+      <div class="sub">${it.W?`${it.W}×${it.H} · 高宽比 ${(it.H/it.W).toFixed(2)}`:'—'}</div>
+      <div class="badges">${badges.join('')}</div></div>
+    <div class="strip">${tilesHTML(it)}</div></div>`;
+}
+function renderList(){
+  const html=state.items.map((it,i)=>matches(it)?rowHTML(it,i):'').join('');
+  $('#list').innerHTML=html||`<div class="empty">${state.items.length?'当前筛选下没有图片':'这个文件夹里没有图片'}</div>`;
+}
+function updateRow(i){
+  const el=document.getElementById('r'+i), it=state.items[i];
+  if(!el){ if(matches(it)) renderList(); return }
+  if(!matches(it)){el.remove(); return}
+  el.outerHTML=rowHTML(it,i);
+  updateRunBtn();
+}
+
+// ------------------------------------------------------------ 大图与手动调整
+
+function visibleIdx(){return state.items.map((it,i)=>i).filter(i=>matches(state.items[i]))}
+const modalZoom={orig:1,result:1};
+function setModalZoom(kind,value){
+  const it=state.items[state.cur]; if(!it) return;
+  const z=Math.max(0.05,Math.min(4,value));
+  modalZoom[kind]=z;
+  if(kind==='orig'){
+    $('#mimg').style.width=Math.max(1,Math.round(it.W*z))+'px';
+    $('#mimg').style.aspectRatio=`${it.W} / ${it.H}`;
+    $('#mOrigZoom').textContent=Math.round(z*100)+'%';
+  }else{
+    $('#mResultZoom').textContent=Math.round(z*100)+'%';
+    renderResultPreview();
+  }
+}
+function fitModal(kind){
+  const it=state.items[state.cur]; if(!it) return;
+  const view=kind==='orig' ? $('#mview') : $('#mresultView');
+  setModalZoom(kind,Math.min(1,Math.max(0.05,(view.clientWidth-36)/it.W)));
+}
+function normalizeRange(it,readControls=false){
+  const count=it.cuts.length+1;
+  let from=readControls ? +$('#mFrom').value : +(it.regenFrom||1);
+  let to=readControls ? +$('#mTo').value : +(it.regenTo||Math.min(3,count));
+  if(!Number.isFinite(from)) from=1;
+  if(!Number.isFinite(to)) to=Math.min(3,count);
+  from=Math.max(1,Math.min(count,Math.round(from)));
+  to=Math.max(1,Math.min(count,Math.round(to)));
+  if(from>to) [from,to]=[to,from];
+  it.regenFrom=from; it.regenTo=to;
+  $('#mFrom').min=$('#mTo').min=1;
+  $('#mFrom').max=$('#mTo').max=count;
+  $('#mFrom').value=from; $('#mTo').value=to;
+  $('#mRange').textContent=from===to ? `重新生成图片 ${from}` : `重新生成图片 ${from}–${to}`;
+  return {from,to};
+}
+function selectedRange(it){return normalizeRange(it,true)}
+function renderResultPreview(){
+  const it=state.items[state.cur];
+  if(!it || !state.modalUrl){$('#mresult').innerHTML='';return}
+  const pieces=outputPieces(it), z=modalZoom.result;
+  const fullHeight=Math.max(1,Math.round(it.H*z));
+  const fullWidth=Math.max(1,Math.round(it.W*z));
+  const from=it.regenFrom||1, to=it.regenTo||Math.min(3,pieces.length);
+  $('#mresult').innerHTML=pieces.map(p=>{
+    const width=Math.max(1,Math.round(p.w*z)), displayH=Math.max(1,Math.round(p.h*z));
+    const px=-Math.round(p.x*z), py=-Math.round(p.y*z);
+    const cropped=p.crop.l>0||p.crop.t>0||p.crop.r<1||p.crop.b<1;
+    const actions=p.deleted
+      ? `<button data-piece="${p.index}" data-act="restore">恢复</button>`
+      : `<button data-piece="${p.index}" data-act="view">大图</button><button data-piece="${p.index}" data-act="crop">裁剪</button><button class="danger" data-piece="${p.index}" data-act="delete">删除</button>`;
+    const body=p.deleted
+      ? `<div class="resultDeleted" style="width:${fullWidth}px">图片 ${p.index} 已删除 · 可撤销或恢复</div>`
+      : `<div class="resultCrop" data-piece="${p.index}" title="点击查看大图" style="width:${width}px;height:${displayH}px;background-image:url('${state.modalUrl}');background-size:${fullWidth}px ${fullHeight}px;background-position:${px}px ${py}px"></div>`;
+    return `<div class="resultPiece${p.index>=from&&p.index<=to?' inRange':''}${p.deleted?' deleted':''}" data-piece="${p.index}" style="width:${p.deleted?fullWidth:width}px">
+      <div class="resultMeta"><span class="resultInfo"><b>图片 ${p.index}</b><span>${p.w}×${p.h}${cropped?' · 已裁剪':''}${p.deleted?' · 已删除':''}</span></span><span class="resultActions">${actions}</span></div>
+      ${body}
+    </div>`;
+  }).join('');
+}
+const pieceView={index:0,zoom:1,cropMode:false,selection:null};
+let cropDrag=null;
+function currentPiece(){
+  const it=state.items[state.cur];
+  return it ? outputPieces(it).find(p=>p.index===pieceView.index) : null;
+}
+function setPieceZoom(value){
+  pieceView.zoom=Math.max(0.05,Math.min(4,value));
+  renderPieceDetail();
+}
+function fitPiece(){
+  const p=currentPiece(); if(!p) return;
+  setPieceZoom(Math.min(1,Math.max(0.05,($('#pview').clientWidth-48)/p.w)));
+}
+function renderCropBox(){
+  const p=currentPiece(), s=pieceView.selection; if(!p||!s) return;
+  const z=pieceView.zoom;
+  $('#pcrop').style.left=Math.round(s.l*p.w*z)+'px';
+  $('#pcrop').style.top=Math.round(s.t*p.h*z)+'px';
+  $('#pcrop').style.width=Math.max(1,Math.round((s.r-s.l)*p.w*z))+'px';
+  $('#pcrop').style.height=Math.max(1,Math.round((s.b-s.t)*p.h*z))+'px';
+}
+function renderPieceDetail(){
+  if(!$('#pieceModal').classList.contains('show')) return;
+  const it=state.items[state.cur], p=currentPiece();
+  if(!it||!p||p.deleted){closePieceDetail();return}
+  const z=pieceView.zoom, width=Math.max(1,Math.round(p.w*z)), height=Math.max(1,Math.round(p.h*z));
+  $('#pTitle').textContent=`图片 ${p.index}`;
+  $('#pSub').textContent=`${p.w}×${p.h} · 原图坐标 x ${p.x}–${p.x+p.w}，y ${p.y}–${p.y+p.h}`;
+  $('#pZoom').textContent=Math.round(z*100)+'%';
+  const el=$('#pimg');
+  el.style.width=width+'px'; el.style.height=height+'px';
+  el.style.backgroundImage=`url("${state.modalUrl}")`;
+  el.style.backgroundSize=`${Math.max(1,Math.round(it.W*z))}px ${Math.max(1,Math.round(it.H*z))}px`;
+  el.style.backgroundPosition=`${-Math.round(p.x*z)}px ${-Math.round(p.y*z)}px`;
+  $('#pcrop').classList.toggle('show',pieceView.cropMode);
+  $('#pStartCrop').style.display=pieceView.cropMode?'none':'';
+  $('#pDelete').style.display=pieceView.cropMode?'none':'';
+  $('#pCropActions').classList.toggle('show',pieceView.cropMode);
+  $('#pHint').textContent=pieceView.cropMode
+    ? '拖动白框或八个圆点选择保留区域；应用前不会改变结果。'
+    : '可放大检查；裁剪和删除只修改右侧效果，生成时才写入文件。';
+  if(pieceView.cropMode) renderCropBox();
+}
+function openPieceDetail(index,startCrop=false){
+  const p=outputPieces(state.items[state.cur]).find(x=>x.index===index);
+  if(!p||p.deleted) return;
+  pieceView.index=index; pieceView.zoom=1; pieceView.cropMode=!!startCrop;
+  pieceView.selection=startCrop?{l:0,t:0,r:1,b:1}:null;
+  $('#pieceModal').classList.add('show');
+  $('#pview').scrollTop=$('#pview').scrollLeft=0;
+  renderPieceDetail();
+  requestAnimationFrame(()=>requestAnimationFrame(fitPiece));
+}
+function closePieceDetail(){
+  cropDrag=null; pieceView.cropMode=false; pieceView.selection=null;
+  $('#pieceModal').classList.remove('show');
+}
+function startPieceCrop(){
+  if(!currentPiece()) return;
+  pieceView.cropMode=true; pieceView.selection={l:0,t:0,r:1,b:1};
+  renderPieceDetail();
+}
+function cancelPieceCrop(){
+  pieceView.cropMode=false; pieceView.selection=null; renderPieceDetail();
+}
+function applyPieceCrop(){
+  const it=state.items[state.cur], p=currentPiece(), s=pieceView.selection;
+  if(!it||!p||!s) return;
+  const c=p.crop;
+  const crop={
+    l:c.l+s.l*(c.r-c.l), t:c.t+s.t*(c.b-c.t),
+    r:c.l+s.r*(c.r-c.l), b:c.t+s.b*(c.b-c.t)
+  };
+  const pxW=Math.round((crop.r-crop.l)*p.baseW), pxH=Math.round((crop.b-crop.t)*p.baseH);
+  if(pxW<10||pxH<10){toast('裁剪区域太小，请至少保留 10×10 像素','err');return}
+  const changed=commitOutputEdit(it,`裁剪图片 ${p.index}`,()=>{
+    const edit={...(it.pieceEdits[p.key]||{})};
+    edit.crop=crop; it.pieceEdits[p.key]=edit;
+  });
+  pieceView.cropMode=false; pieceView.selection=null;
+  if(changed){renderPieceDetail();toast(`图片 ${p.index} 已裁剪，可随时撤销`,'ok')}
+  else renderPieceDetail();
+}
+function deletePiece(index){
+  const it=state.items[state.cur], p=outputPieces(it).find(x=>x.index===index);
+  if(!p||p.deleted) return;
+  commitOutputEdit(it,`删除图片 ${index}`,()=>{
+    it.pieceEdits[p.key]={...(it.pieceEdits[p.key]||{}),deleted:true};
+  });
+  if(pieceView.index===index) closePieceDetail();
+  toast(`图片 ${index} 已从右侧效果删除，可点击撤销恢复`,'ok',4500);
+}
+function restorePiece(index){
+  const it=state.items[state.cur], p=outputPieces(it).find(x=>x.index===index);
+  if(!p||!p.deleted) return;
+  commitOutputEdit(it,`恢复图片 ${index}`,()=>{
+    const edit={...(it.pieceEdits[p.key]||{})};
+    delete edit.deleted;
+    if(edit.crop) it.pieceEdits[p.key]=edit; else delete it.pieceEdits[p.key];
+  });
+  toast(`图片 ${index} 已恢复`,'ok');
+}
+async function openModal(i){
+  const it=state.items[i]; if(!it.W) return;
+  selectedCut=-1;
+  const prevCur=state.cur; state.cur=i;
+  if(prevCur>=0) updateRow(prevCur);
+  updateRow(i);
+  if(state.modalUrl) URL.revokeObjectURL(state.modalUrl);
+  state.modalUrl=URL.createObjectURL(await it.handle.getFile());
+  $('#mimgEl').src=state.modalUrl;
+  $('#mview').scrollTop=0;
+  $('#mview').scrollLeft=0;
+  $('#mresultView').scrollTop=0;
+  $('#mresultView').scrollLeft=0;
+  $('.mscroll').scrollTop=0;
+  $('#modal').classList.add('show');
+  renderModal();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{fitModal('orig');fitModal('result')}));
+}
+function closeModal(){
+  closePieceDetail();
+  selectedCut=-1;
+  $('#modal').classList.remove('show');
+  if(state.modalUrl){URL.revokeObjectURL(state.modalUrl); state.modalUrl=null}
+  const c=state.cur; state.cur=-1; if(c>=0) updateRow(c);
+}
+function renderModal(){
+  const it=state.items[state.cur]; if(!it) return;
+  $('#mtitle').textContent=it.path;
+  const saveText=it.saveState==='saving'?' · 正在保存调整'
+    :it.saveState==='saved'?(it.restored?' · 已恢复本机调整':' · 调整已保存到本机')
+    :it.saveState==='error'?' · 调整保存失败':'';
+  const editText=hasOutputEdits(it)?' · 右侧效果已编辑':'';
+  $('#msub').textContent=`${it.W}×${it.H} · 高宽比 ${(it.H/it.W).toFixed(2)} · ${STATUS[it.status][0]}${editText}${saveText}${it.msg?' · '+it.msg:''}`;
+  const b=bounds(it), pct=y=>y/it.H*100+'%';
+  const dk=drag?.active ? drag.k : selectedCut;
+  const dragging=!!drag?.active;
+  $('#mlines').innerHTML=it.cuts.map((c,k)=>`<div class="cut ${c.kind}${k===dk?(dragging?' dragging':' selected'):''}" data-k="${k}" style="top:${pct(c.y)};color:${KIND_COLOR[c.kind]};border-top-color:${KIND_COLOR[c.kind]}" title="点击删除 · 长按拖动 · 右键键盘微调"></div>`).join('')
+    + b.slice(0,-1).map((y,k)=>`<div class="seg" style="top:${pct(y)}">${String(k+1).padStart(2,'0')}</div>`).join('')
+    + (dk>=0 && it.cuts[dk] ? `<div class="dragtip" style="top:${pct(it.cuts[dk].y)};color:${KIND_COLOR[it.cuts[dk].kind]}">y ${it.cuts[dk].y} · ${dragging?SNAP_LABEL[it.cuts[dk].kind]:'↑↓ 1px · Shift 10px'}</div>` : '');
+  const minR=params().minRatio;
+  $('#mpieces').innerHTML=outputPieces(it).map(p=>{const r=p.h/p.w;
+    return `<div class="${r<minR?'small':''}"><span>${String(p.index).padStart(2,'0')}　${p.deleted?'已删除':`${p.x},${p.y} · ${p.w}×${p.h}`}</span><span>${p.deleted?'最终不输出':`比 ${r.toFixed(2)}${r<minR?' 偏小':''}`}</span></div>`}).join('');
+  normalizeRange(it);
+  renderResultPreview();
+  $('#mReset').disabled=!it.cutEdited&&!hasOutputEdits(it);
+  $('#mOne').disabled=!it.cuts.length || !outputPieces(it).some(p=>!p.deleted) || state.busy;
+  $('#mRange').disabled=!it.cuts.length || state.busy;
+  $('#mUndo').disabled=!it.outputHistory?.length;
+  $('#mRedo').disabled=!it.outputFuture?.length;
+  $('#mUndo').title=it.outputHistory?.length?`撤销：${it.outputHistory.at(-1).label}`:'没有可撤销操作';
+  $('#mRedo').title=it.outputFuture?.length?`重做：${it.outputFuture.at(-1).label}`:'没有可重做操作';
+  const v=visibleIdx(), p=v.indexOf(state.cur);
+  $('#mPrev').disabled=p<=0; $('#mNext').disabled=p<0||p>=v.length-1;
+}
+async function persistAdjustment(it){
+  const version=(it.saveVersion||0)+1;
+  it.saveVersion=version;
+  const source=state.src;
+  ensureCutIds(it);
+  const data={
+    size:it.size,lastModified:it.lastModified,width:it.W,height:it.H,
+    cuts:it.cuts.map(c=>({y:c.y,kind:c.kind,id:c.id})),
+    pieceEdits:clonePieceEdits(it.pieceEdits),
+    outputHistory:cleanOutputHistory(it.outputHistory),
+    outputFuture:cleanOutputHistory(it.outputFuture),
+    cutEdited:!!it.cutEdited,
+    savedAt:Date.now()
+  };
+  state.savedAdjustments[it.path]=data;
+  const ok=await adjustmentStore.save(source,it.path,data);
+  if(it.saveVersion!==version) return;
+  it.saveState=ok?'saved':'error';
+  const i=state.items.indexOf(it);
+  if(i>=0) updateRow(i);
+  if(i>=0 && state.cur===i) renderModal();
+  if(!ok) toast('手动调整保存失败，请不要关闭页面并重试','err',5000);
+}
+async function clearSavedAdjustment(it){
+  it.saveVersion=(it.saveVersion||0)+1;
+  delete state.savedAdjustments[it.path];
+  const source=state.src;
+  const ok=await adjustmentStore.remove(source,it.path);
+  if(!ok){
+    it.saveState='error';
+    const i=state.items.indexOf(it);
+    if(i>=0) updateRow(i);
+    if(i>=0 && state.cur===i) renderModal();
+    toast('清除本机调整记录失败','err');
+  }
+}
+function saveEditedState(it){
+  prunePieceEdits(it);
+  it.edited=!!it.cutEdited||hasOutputEdits(it);
+  if(['short','done','exists','error'].includes(it.status) && it.metrics) it.status='plan';
+  it.checked=it.cuts.length>0; it.msg=''; it.restored=false; it.saveState='saving';
+  renderModal(); updateRow(state.cur); renderChips();
+  persistAdjustment(it);
+}
+function markEdited(it){it.cutEdited=true;saveEditedState(it)}
+function commitOutputEdit(it,label,change){
+  const before=clonePieceEdits(it.pieceEdits);
+  change();
+  it.pieceEdits=cleanPieceEdits(it.pieceEdits);
+  if(JSON.stringify(before)===JSON.stringify(it.pieceEdits)) return false;
+  it.outputHistory.push({state:before,label});
+  if(it.outputHistory.length>50) it.outputHistory.shift();
+  it.outputFuture=[];
+  it.lastOutputAction=label;
+  saveEditedState(it);
+  return true;
+}
+function commitCutEdit(it,label,change){
+  const beforeCuts=cloneCuts(it.cuts), beforeEdits=clonePieceEdits(it.pieceEdits), beforeCutEdited=!!it.cutEdited;
+  change();
+  if(JSON.stringify(beforeCuts)===JSON.stringify(it.cuts) && JSON.stringify(beforeEdits)===JSON.stringify(it.pieceEdits)) return false;
+  it.outputHistory.push({state:beforeEdits,cuts:beforeCuts,cutEdited:beforeCutEdited,label});
+  if(it.outputHistory.length>50) it.outputHistory.shift();
+  it.outputFuture=[]; it.lastOutputAction=label; it.cutEdited=true;
+  saveEditedState(it);
+  return true;
+}
+function undoOutputEdit(){
+  const it=state.items[state.cur], entry=it?.outputHistory?.pop(); if(!entry) return;
+  const future={state:clonePieceEdits(it.pieceEdits),label:entry.label};
+  if(entry.cuts){future.cuts=cloneCuts(it.cuts);future.cutEdited=!!it.cutEdited}
+  it.outputFuture.push(future);
+  if(entry.cuts){it.cuts=cloneCuts(entry.cuts);it.cutEdited=!!entry.cutEdited}
+  it.pieceEdits=clonePieceEdits(entry.state);
+  it.lastOutputAction=`已撤销：${entry.label}`;
+  saveEditedState(it);
+  if($('#pieceModal').classList.contains('show')) renderPieceDetail();
+  toast(`已撤销：${entry.label}`,'ok');
+}
+function redoOutputEdit(){
+  const it=state.items[state.cur], entry=it?.outputFuture?.pop(); if(!entry) return;
+  const before={state:clonePieceEdits(it.pieceEdits),label:entry.label};
+  if(entry.cuts){before.cuts=cloneCuts(it.cuts);before.cutEdited=!!it.cutEdited}
+  it.outputHistory.push(before);
+  if(entry.cuts){it.cuts=cloneCuts(entry.cuts);it.cutEdited=!!entry.cutEdited}
+  it.pieceEdits=clonePieceEdits(entry.state);
+  it.lastOutputAction=`已重做：${entry.label}`;
+  saveEditedState(it);
+  if($('#pieceModal').classList.contains('show')) renderPieceDetail();
+  toast(`已重做：${entry.label}`,'ok');
+}
+// 切口线：短按删除，长按或按下后上下拖动则移动
+const LONG_PRESS_MS=250, DRAG_START_PX=5, EDGE_SCROLL_PX=56;
+const SNAP_LABEL={natural:'吸附到分隔带', edge:'吸附到拼接缝', manual:'自由位置（按住 Option 不吸附）', forced:'强制切'};
+let drag=null, suppressClick=false, selectedCut=-1;
+
+function startDrag(){
+  if(!drag || drag.active) return;
+  clearTimeout(drag.timer);
+  drag.active=true;
+  document.body.classList.add('dragging-cut');
+  moveDrag();
+  requestAnimationFrame(edgeScroll);
+}
+function moveDrag(){
+  const it=state.items[state.cur], k=drag.k;
+  if(Math.abs(drag.lastY-drag.startY)<=DRAG_START_PX && $('#mview').scrollTop===drag.startScroll){
+    it.cuts[k]=drag.orig; renderModal(); return;
+  }
+  const rect=$('#mimg').getBoundingClientRect();
+  const lo=(k>0 ? it.cuts[k-1].y : 0)+10, hi=(k<it.cuts.length-1 ? it.cuts[k+1].y : it.H)-10;
+  if(lo>hi) return;
+  let y=Math.round((drag.lastY-rect.top)/rect.height*it.H);
+  y=Math.min(hi, Math.max(lo, y));
+  let kind='manual';
+  if(!drag.alt){
+    let best=null;
+    for(const s of it.snaps)
+      if(s.y>=lo && s.y<=hi && Math.abs(s.y-y)<=0.02*it.W && (!best || Math.abs(s.y-y)<Math.abs(best.y-y))) best=s;
+    if(best){y=best.y; kind=best.kind}
+  }
+  it.cuts[k]={...it.cuts[k],y,kind};
+  renderModal();
+}
+function edgeScroll(){
+  if(!drag?.active) return;
+  const v=$('#mview'), r=v.getBoundingClientRect();
+  let d=0;
+  if(drag.lastY<r.top+EDGE_SCROLL_PX) d=-(r.top+EDGE_SCROLL_PX-drag.lastY)/3;
+  else if(drag.lastY>r.bottom-EDGE_SCROLL_PX) d=(drag.lastY-(r.bottom-EDGE_SCROLL_PX))/3;
+  if(d){const before=v.scrollTop; v.scrollTop+=d; if(v.scrollTop!==before) moveDrag()}
+  requestAnimationFrame(edgeScroll);
+}
+function endDrag(commit){
+  const it=state.items[state.cur], d=drag;
+  clearTimeout(d.timer); drag=null; suppressClick=true;
+  document.body.classList.remove('dragging-cut');
+  if(!d.active){
+    if(commit){it.cuts.splice(d.k,1); selectedCut=-1; markEdited(it)}
+    return;
+  }
+  const c=it.cuts[d.k];
+  selectedCut=d.k;
+  if(!commit){it.cuts[d.k]=d.orig; renderModal(); return}
+  if(c.y!==d.orig.y || c.kind!==d.orig.kind) markEdited(it); else renderModal();
+}
+
+const mimg=$('#mimg');
+mimg.addEventListener('pointerdown', e=>{
+  suppressClick=false;
+  const line=e.target.closest('.cut');
+  if(!line || state.busy || e.button!==0) return;
+  e.preventDefault();
+  const it=state.items[state.cur], k=+line.dataset.k;
+  drag={k, orig:{...it.cuts[k]}, startY:e.clientY, lastY:e.clientY, startScroll:$('#mview').scrollTop, alt:e.altKey, active:false};
+  try{mimg.setPointerCapture(e.pointerId)}catch(err){}
+  drag.timer=setTimeout(startDrag, LONG_PRESS_MS);
+});
+mimg.addEventListener('pointermove', e=>{
+  if(!drag) return;
+  drag.lastY=e.clientY; drag.alt=e.altKey;
+  if(!drag.active){ if(Math.abs(e.clientY-drag.startY)>DRAG_START_PX) startDrag(); return }
+  moveDrag();
+});
+mimg.addEventListener('pointerup', ()=>{ if(drag) endDrag(true) });
+mimg.addEventListener('pointercancel', ()=>{ if(drag) endDrag(false) });
+
+mimg.addEventListener('contextmenu', e=>{
+  const line=e.target.closest('.cut');
+  if(!line || state.busy) return;
+  e.preventDefault();
+  selectedCut=+line.dataset.k;
+  renderModal();
+});
+
+mimg.addEventListener('click', e=>{
+  if(suppressClick){suppressClick=false; return}
+  const it=state.items[state.cur]; if(!it || state.busy || e.target.closest('.cut')) return;
+  const rect=$('#mimg').getBoundingClientRect();
+  let y=Math.round((e.clientY-rect.top)/rect.height*it.H);
+  let kind='manual';
+  const snapDist=0.02*it.W; let best=null;
+  for(const s of it.snaps) if(Math.abs(s.y-y)<=snapDist && (!best||Math.abs(s.y-y)<Math.abs(best.y-y))) best=s;
+  if(best){y=best.y; kind=best.kind}
+  if(y<=0 || y>=it.H) return;
+  if(it.cuts.some(c=>Math.abs(c.y-y)<10)){toast('这里已经有切口了');return}
+  it.cuts.push({y,kind,id:newCutId()}); it.cuts.sort((a,b)=>a.y-b.y);
+  markEdited(it);
+});
+$('#mresult').addEventListener('click',e=>{
+  const action=e.target.closest('[data-act]');
+  if(action){
+    const index=+action.dataset.piece;
+    if(action.dataset.act==='view') openPieceDetail(index);
+    else if(action.dataset.act==='crop') openPieceDetail(index,true);
+    else if(action.dataset.act==='delete') deletePiece(index);
+    else if(action.dataset.act==='restore') restorePiece(index);
+    return;
+  }
+  const crop=e.target.closest('.resultCrop');
+  if(crop) openPieceDetail(+crop.dataset.piece);
+});
+
+const pcrop=$('#pcrop');
+pcrop.addEventListener('pointerdown',e=>{
+  if(!pieceView.cropMode||e.button!==0) return;
+  e.preventDefault();
+  cropDrag={
+    edge:e.target.dataset.edge||'move',
+    startX:e.clientX,startY:e.clientY,
+    original:{...pieceView.selection},
+    rect:$('#pimg').getBoundingClientRect()
+  };
+  try{pcrop.setPointerCapture(e.pointerId)}catch(err){}
+});
+pcrop.addEventListener('pointermove',e=>{
+  if(!cropDrag) return;
+  const p=currentPiece(), o=cropDrag.original, edge=cropDrag.edge;
+  const dx=(e.clientX-cropDrag.startX)/cropDrag.rect.width;
+  const dy=(e.clientY-cropDrag.startY)/cropDrag.rect.height;
+  const minX=Math.min(.45,Math.max(.002,10/p.w)), minY=Math.min(.45,Math.max(.002,10/p.h));
+  let {l,t,r,b}=o;
+  if(edge==='move'){
+    const w=r-l,h=b-t;
+    l=Math.max(0,Math.min(1-w,l+dx)); r=l+w;
+    t=Math.max(0,Math.min(1-h,t+dy)); b=t+h;
+  }else{
+    if(edge.includes('w')) l=Math.max(0,Math.min(r-minX,l+dx));
+    if(edge.includes('e')) r=Math.min(1,Math.max(l+minX,r+dx));
+    if(edge.includes('n')) t=Math.max(0,Math.min(b-minY,t+dy));
+    if(edge.includes('s')) b=Math.min(1,Math.max(t+minY,b+dy));
+  }
+  pieceView.selection={l,t,r,b}; renderCropBox();
+});
+const endCropDrag=()=>{cropDrag=null};
+pcrop.addEventListener('pointerup',endCropDrag);
+pcrop.addEventListener('pointercancel',endCropDrag);
+
+$('#pOut').onclick=()=>setPieceZoom(pieceView.zoom/1.25);
+$('#pIn').onclick=()=>setPieceZoom(pieceView.zoom*1.25);
+$('#pFit').onclick=fitPiece;
+$('#pClose').onclick=closePieceDetail;
+$('#pStartCrop').onclick=startPieceCrop;
+$('#pCancelCrop').onclick=cancelPieceCrop;
+$('#pApplyCrop').onclick=applyPieceCrop;
+$('#pDelete').onclick=()=>deletePiece(pieceView.index);
+$('#pieceModal').addEventListener('click',e=>{if(e.target.id==='pieceModal') closePieceDetail()});
+$('#mReset').onclick=()=>{
+  const it=state.items[state.cur]; it.edited=false; it.msg='';
+  it.cutEdited=false; it.pieceEdits={}; it.outputHistory=[]; it.outputFuture=[];
+  selectedCut=-1; it.restored=false; it.saveState='';
+  it.status='wait'; replan(it);
+  renderModal(); updateRow(state.cur); renderChips();
+  clearSavedAdjustment(it);
+};
+$('#mOrigOut').onclick=()=>setModalZoom('orig',modalZoom.orig/1.25);
+$('#mOrigIn').onclick=()=>setModalZoom('orig',modalZoom.orig*1.25);
+$('#mOrigFit').onclick=()=>fitModal('orig');
+$('#mResultOut').onclick=()=>setModalZoom('result',modalZoom.result/1.25);
+$('#mResultIn').onclick=()=>setModalZoom('result',modalZoom.result*1.25);
+$('#mResultFit').onclick=()=>fitModal('result');
+['mFrom','mTo'].forEach(id=>$('#'+id).addEventListener('change',()=>{
+  const it=state.items[state.cur]; if(!it) return;
+  normalizeRange(it,true); renderResultPreview();
+}));
+$('#mRange').onclick=regenerateRange;
+$('#mUndo').onclick=undoOutputEdit;
+$('#mRedo').onclick=redoOutputEdit;
+$('#mOne').onclick=()=>runCut([state.cur],true);
+$('#mClose').onclick=closeModal;
+$('#modal').addEventListener('click', e=>{if(e.target.id==='modal') closeModal()});
+document.addEventListener('keyup', e=>{ if(drag?.active && e.key==='Alt'){drag.alt=false; moveDrag()} });
+function step(d){const v=visibleIdx(), p=v.indexOf(state.cur); if(v[p+d]!==undefined) openModal(v[p+d])}
+$('#mPrev').onclick=()=>step(-1);
+$('#mNext').onclick=()=>step(1);
+function nudgeSelected(delta){
+  const it=state.items[state.cur], k=selectedCut;
+  if(!it || k<0 || k>=it.cuts.length) return;
+  const lo=(k>0 ? it.cuts[k-1].y : 0)+10;
+  const hi=(k<it.cuts.length-1 ? it.cuts[k+1].y : it.H)-10;
+  const y=Math.min(hi,Math.max(lo,it.cuts[k].y+delta));
+  if(y===it.cuts[k].y) return;
+  it.cuts[k]={...it.cuts[k],y,kind:'manual'};
+  markEdited(it);
+}
+document.addEventListener('keydown', e=>{
+  if(!$('#modal').classList.contains('show')) return;
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='z' && !pieceView.cropMode){
+    e.preventDefault();
+    if(e.shiftKey) redoOutputEdit(); else undoOutputEdit();
+    return;
+  }
+  if($('#pieceModal').classList.contains('show')){
+    if(e.key==='Escape'){
+      e.preventDefault();
+      if(pieceView.cropMode) cancelPieceCrop(); else closePieceDetail();
+    }
+    return;
+  }
+  if(drag){
+    if(e.key==='Escape'){e.preventDefault(); endDrag(false)}
+    else if(e.key==='Alt' && drag.active){drag.alt=true; moveDrag()}
+    return;
+  }
+  if(selectedCut>=0 && (e.key==='ArrowUp' || e.key==='ArrowDown')){
+    e.preventDefault();
+    nudgeSelected((e.key==='ArrowUp'?-1:1)*(e.shiftKey?10:1));
+    return;
+  }
+  if(selectedCut>=0 && e.key==='Escape'){
+    e.preventDefault(); selectedCut=-1; renderModal(); return;
+  }
+  if(e.key==='Escape') closeModal();
+  else if(e.key==='ArrowLeft') step(-1);
+  else if(e.key==='ArrowRight') step(1);
+});
+
+// ------------------------------------------------------------ 事件
+
+$('#pickSrc').onclick=pickSrc;
+$('#pickOut').onclick=pickOutput;
+$('#stop').onclick=()=>{state.stop=true; $('#stop').textContent='正在停止…'};
+$('#run').onclick=()=>runCut(state.items.map((it,i)=>i).filter(i=>state.items[i].checked));
+$('#chips').addEventListener('click', e=>{const b=e.target.closest('[data-f]'); if(!b) return; state.filter=b.dataset.f; renderChips(); renderList()});
+$('#list').addEventListener('click', e=>{
+  const cb=e.target.closest('.pick');
+  if(cb){state.items[+cb.dataset.i].checked=cb.checked; updateRunBtn(); return}
+  const row=e.target.closest('.row'); if(row) openModal(+row.dataset.i);
+});
+function setChecked(fn){state.items.forEach((it,i)=>{if(it.cuts.length) it.checked=fn(it,i)}); renderList(); updateRunBtn()}
+$('#selAll').onclick=()=>setChecked(it=>matches(it) && it.status==='plan' ? true : it.checked);
+$('#selNone').onclick=()=>setChecked(()=>false);
+$('#selFive').onclick=()=>{let n=0; setChecked(it=>it.status==='plan' && matches(it) && n++<5)};
+let replanTimer;
+['maxRatio','minRatio','minGap'].forEach(id=>$('#'+id).addEventListener('input',()=>{
+  clearTimeout(replanTimer);
+  replanTimer=setTimeout(()=>{
+    const p=params();
+    if(p.minRatio>=p.maxRatio){toast('最小高宽比必须小于最大高宽比','err');return}
+    state.items.forEach(it=>{try{replan(it)}catch(e){it.status='error'; it.msg=e.message}});
+    renderList(); renderChips(); if(state.cur>=0) renderModal();
+  },350);
+}));
+$('#recursive').addEventListener('change',()=>{if(state.src && !state.busy) setSrc(state.src)});
+
+const drop=$('#drop');
+['dragenter','dragover'].forEach(t=>document.addEventListener(t,e=>{e.preventDefault(); drop.classList.add('over')}));
+['dragleave','drop'].forEach(t=>document.addEventListener(t,e=>{if(t==='dragleave'&&e.relatedTarget) return; drop.classList.remove('over')}));
+document.addEventListener('drop', async e=>{
+  e.preventDefault();
+  if(state.busy) return;
+  const item=[...e.dataTransfer.items].find(x=>x.kind==='file');
+  if(!item?.getAsFileSystemHandle){toast('当前浏览器不支持拖入文件夹，请点「选择文件夹」','err');return}
+  const h=await item.getAsFileSystemHandle();
+  if(h?.kind!=='directory'){toast('请拖入文件夹，而不是单个文件','err');return}
+  setSrc(h);
+});
+
+window.addEventListener('beforeunload',e=>{
+  if(state.items.some(it=>it.saveState==='saving')){
+    e.preventDefault();
+    e.returnValue='';
+  }
+});
+
+if(!window.showDirectoryPicker) $('#srcVal').innerHTML='<b style="color:var(--danger)">当前浏览器不支持文件夹读写，请用最新版桌面版 Google Chrome 打开这个 HTML。</b>';
+</script>
+</body>
+</html>
