@@ -251,10 +251,10 @@ const RESULT_SUFFIX = '切分结果';
 const KIND_COLOR = {natural:'#e61e1e', edge:'#3d8bff', forced:'#ffa630', manual:'#41d69a'};
 const KIND_MARK = {natural:'', edge:'~', forced:'*', manual:'+'};
 const STATUS = {
-  wait:['等待分析',''], short:['不够长，跳过',''], plan:['待切分','acc'],
+  wait:['等待分析',''], short:['未发现拼接，可手动切',''], plan:['待切分','acc'],
   done:['已切分','ok'], exists:['已有结果，已跳过','warn'], error:['失败','err']
 };
-const FILTERS = [['all','全部'],['plan','待切分'],['forced','含强制切'],['short','不够长'],['done','已完成'],['error','失败']];
+const FILTERS = [['all','全部'],['plan','待切分'],['forced','含强制切'],['short','未发现拼接'],['done','已完成'],['error','失败']];
 
 const state = {src:null, parent:null, items:[], savedAdjustments:{}, filter:'all', busy:false, stop:false, cur:-1, modalUrl:null};
 let cutSeq=0;
@@ -586,25 +586,84 @@ function planCuts(m, W, H, p){
   while(prev[j]>0){j=prev[j]; chain.push(j)}
   chain.reverse();
   const refine=c=>c.kind==='edge'?{...c,y:refineVisibleBoundary(m,W,H,c.y)}:{...c};
-  const cuts=chain.map(j=>refine({y:ys[j],kind:cands[j-1].kind})).sort((a,b)=>a.y-b.y);
+  const cuts=chain.map(j=>refine({y:ys[j],kind:cands[j-1].kind,cost:cands[j-1].cost})).sort((a,b)=>a.y-b.y);
   const snaps=cands.filter(c=>c.kind!=='forced').map(refine).sort((a,b)=>a.y-b.y);
   return {cuts,snaps};
 }
 
+// 不够长的图只认确定的拼接：整行像素同时突变、而上下邻近行都很平静的接缝，
+// 或上下边都是这种接缝的纯色条。照片内部的暗部、色块过渡不会满足这个条件。
+function clearStitchCuts(m,W,H,p){
+  const {edgeFrac,rowStd,rowGrad}=m;
+  const minH=p.minRatio*W, near=Math.max(6,Math.round(.003*W)), far=Math.max(20,Math.round(.015*W));
+  const seams=[];
+  for(let y=2;y<H-1;y++){
+    const f=edgeFrac[y-1];
+    if(f<.75||f<edgeFrac[y-2]||f<edgeFrac[y]) continue;
+    const around=[];
+    for(let q=y-far;q<=y+far;q++) if(Math.abs(q-y)>near&&q>=1&&q<H) around.push(edgeFrac[q-1]);
+    if(median(around)<=.35) seams.push({y,f});
+  }
+  const flatShare=(a,b)=>{let n=0;for(let y=a;y<b;y++) if(rowStd[y]<8&&rowGrad[y]<2.5) n++;return n/Math.max(1,b-a)};
+  const cands=[], maxBand=Math.max(8,Math.round(.06*W));
+  for(let i=0;i<seams.length;i++){
+    const a=seams[i], b=seams[i+1];
+    if(b&&b.y-a.y<=maxBand&&flatShare(a.y,b.y)>=.8){
+      cands.push({y:Math.floor((a.y+b.y)/2),f:Math.max(a.f,b.f)+.5,kind:'natural'}); i++;
+    }else cands.push({y:a.y,f:a.f,kind:'edge'});
+  }
+  const chosen=[];
+  for(const c of cands.sort((a,b)=>b.f-a.f)){
+    if(c.y<minH||c.y>H-minH||chosen.some(x=>Math.abs(x.y-c.y)<minH)) continue;
+    chosen.push({y:c.y,kind:c.kind});
+  }
+  return chosen.sort((a,b)=>a.y-b.y);
+}
 function replan(it){
   if(!it.metrics || it.edited || !['wait','plan','short'].includes(it.status)) return;
   const p=params();
-  if(it.H/it.W <= p.maxRatio){it.status='short'; it.cuts=[]; it.snaps=[]; it.checked=false; return}
-  const r=planCuts(it.metrics, it.W, it.H, p);
   const wasPlan=it.status==='plan';
-  it.cuts=r.cuts.map(c=>({...c,id:newCutId()})); it.snaps=r.snaps; it.status='plan';
-  const refined=refineInitialCuts(it,p);
-  it.autoRefined=refined.added; it.autoMerged=refined.removed; it.autoTarget=refined.target;
+  const r=planCuts(it.metrics, it.W, it.H, p);
+  const toCut=c=>({y:c.y,kind:c.kind,id:newCutId()});
+  it.snaps=r.snaps; it.autoRefined=0; it.autoMerged=0; it.autoTarget=0;
+  if(it.H/it.W <= p.maxRatio){
+    const strong=clearStitchCuts(it.metrics,it.W,it.H,p);
+    it.suggest=strong.length ? strong
+      : r.cuts.filter(c=>c.kind!=='forced'&&c.cost<0).map(c=>({y:c.y,kind:c.kind}));
+    it.shortStitch=strong.length>0;
+    it.cuts=strong.map(toCut);
+    it.status=strong.length?'plan':'short';
+  }else{
+    it.suggest=[]; it.shortStitch=false;
+    it.cuts=r.cuts.map(toCut); it.status='plan';
+    const refined=refineInitialCuts(it,p);
+    it.autoRefined=refined.added; it.autoMerged=refined.removed; it.autoTarget=refined.target;
+    // 只纠正明显偏离接缝的切口；3px 以内保留 refineVisibleBoundary 的细分隔线处理。
+    const seams=clearStitchCuts(it.metrics,it.W,it.H,p).filter(s=>s.kind==='edge'), radius=Math.max(6,.02*it.W);
+    for(const c of it.cuts){
+      const s=seams.find(x=>Math.abs(x.y-c.y)>3&&Math.abs(x.y-c.y)<=radius);
+      if(s){c.y=s.y; c.kind='edge'}
+    }
+    it.cuts=it.cuts.sort((a,b)=>a.y-b.y).filter((c,i,a)=>!i||c.y-a[i-1].y>10);
+  }
   const colorCuts=stableColorBoundaries(it.metrics,it.W,it.H).filter(c=>c.q>=6);
   it.colorDetected=it.cuts.filter(c=>colorCuts.some(x=>Math.abs(x.y-c.y)<=Math.max(3,.01*it.W))).length;
   const darkCuts=darkSeparatorBands(it.metrics,it.W,it.H);
   it.darkDetected=it.cuts.filter(c=>darkCuts.some(x=>c.y>=x.start&&c.y<=x.end)).length;
-  if(!wasPlan) it.checked=true;
+  if(it.status!=='plan') it.checked=false;
+  else if(!wasPlan) it.checked=true;
+}
+// 勾选一张还没有切口的图：有建议切口就采用（可撤销），否则打开大图让用户手动添加。
+function checkWithoutCuts(i){
+  const it=state.items[i];
+  if(it.suggest?.length){
+    commitCutEdit(it,'采用建议切口',()=>{it.cuts=it.suggest.map(c=>({...c,id:newCutId()}))});
+    updateRow(i);
+    toast(`已采用 ${it.suggest.length} 条建议切口，点开这一行可检查和调整`,'ok',5000);
+    return;
+  }
+  openModal(i);
+  toast('这张没有识别到明显分界，请在左侧原图上点击添加切口，添加后会自动勾选','',7000);
 }
 
 async function makeThumb(bmp){
@@ -1228,8 +1287,11 @@ function tilesHTML(it){
 function rowHTML(it, i){
   const [label, cls]=STATUS[it.status];
   const badges=[`<span class="bd ${cls}">${label}</span>`];
+  if(it.status==='short' && it.suggest?.length)
+    badges.push(`<span class="bd warn">有 ${it.suggest.length} 条建议切口，勾选即采用</span>`);
   if(it.cuts.length){
     badges.push(`<span class="bd">${it.cuts.length+1} 片</span>`);
+    if(it.shortStitch && !it.cutEdited) badges.push('<span class="bd acc">短图拼接</span>');
     if(it.colorDetected) badges.push(`<span class="bd acc">色彩分界 ${it.colorDetected}</span>`);
     if(it.darkDetected) badges.push(`<span class="bd acc">深色分隔带 ${it.darkDetected}</span>`);
     if(it.autoRefined) badges.push(`<span class="bd ok">自动细分 +${it.autoRefined}</span>`);
@@ -1248,7 +1310,7 @@ function rowHTML(it, i){
   else if(it.saveState==='error') badges.push('<span class="bd err">调整保存失败</span>');
   if(it.msg && it.status!=='error') badges.push(`<span class="bd">${esc(it.msg)}</span>`);
   return `<div class="row${state.cur===i?' cur':''}" id="r${i}" data-i="${i}">
-    <input type="checkbox" class="pick lock" data-i="${i}" ${it.checked?'checked':''} ${it.cuts.length?'':'disabled'}>
+    <input type="checkbox" class="pick lock" data-i="${i}" ${it.checked?'checked':''} ${it.thumb&&it.status!=='error'?'':'disabled'}>
     <div><div class="name" title="${esc(it.path)}">${esc(it.path)}</div>
       <div class="sub">${it.W?`${it.W}×${it.H} · 高宽比 ${(it.H/it.W).toFixed(2)}`:'—'}</div>
       <div class="badges">${badges.join('')}</div></div>
@@ -1260,6 +1322,7 @@ function renderList(){
 }
 function updateRow(i){
   const el=document.getElementById('r'+i), it=state.items[i];
+  if(!it) return;
   if(!el){ if(matches(it)) renderList(); return }
   if(!matches(it)){el.remove(); return}
   el.outerHTML=rowHTML(it,i);
@@ -1811,7 +1874,11 @@ $('#run').onclick=()=>runCut(state.items.map((it,i)=>i).filter(i=>state.items[i]
 $('#chips').addEventListener('click', e=>{const b=e.target.closest('[data-f]'); if(!b) return; state.filter=b.dataset.f; renderChips(); renderList()});
 $('#list').addEventListener('click', e=>{
   const cb=e.target.closest('.pick');
-  if(cb){state.items[+cb.dataset.i].checked=cb.checked; updateRunBtn(); return}
+  if(cb){
+    const i=+cb.dataset.i;
+    if(cb.checked && !state.items[i].cuts.length){cb.checked=false; checkWithoutCuts(i); return}
+    state.items[i].checked=cb.checked; updateRunBtn(); return;
+  }
   const row=e.target.closest('.row'); if(row) openModal(+row.dataset.i);
 });
 function setChecked(fn){state.items.forEach((it,i)=>{if(it.cuts.length) it.checked=fn(it,i)}); renderList(); updateRunBtn()}
